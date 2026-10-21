@@ -1,0 +1,21 @@
+{
+  "name": "@projeto-truco/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "start": "tsx src/main.ts"
+  },
+  "dependencies": {
+    "@projeto-truco/game-engine": "*",
+    "firebase-admin": "^14.5.0",
+    "pg": "^8.23.1",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.23.1",
+    "@types/ws": "^8.5.12"
+  }
+}

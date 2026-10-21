@@ -1,0 +1,302 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Projeto Truco</title>
+  <style>
+    :root { color-scheme: dark; --bg:#0d1117; --panel:#161b22; --ink:#e6edf3; --muted:#8b949e; --gold:#f2c14e; --green:#2ea043; --red:#da3633; }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family: system-ui, sans-serif; background: radial-gradient(circle at 50% 0%, #1b3a2a, var(--bg) 60%); color: var(--ink); min-height: 100vh; }
+    header { padding: 12px 16px; display:flex; justify-content:space-between; align-items:center; }
+    h1 { font-size: 18px; margin: 0; letter-spacing: .5px; }
+    main { max-width: 900px; margin: 0 auto; padding: 8px 16px 32px; }
+    .panel { background: var(--panel); border: 1px solid #30363d; border-radius: 12px; padding: 16px; margin-bottom: 12px; }
+    input { background:#0d1117; color:var(--ink); border:1px solid #30363d; border-radius:8px; padding:10px 12px; font-size:16px; }
+    button { background:#21262d; color:var(--ink); border:1px solid #30363d; border-radius:8px; padding:10px 14px; font-size:15px; cursor:pointer; }
+    button:hover:not(:disabled) { border-color: var(--gold); }
+    button:disabled { opacity:.45; cursor:not-allowed; }
+    button.primary { background: var(--green); border-color: var(--green); color:#fff; }
+    button.danger { background: var(--red); border-color: var(--red); color:#fff; }
+    button.truco { background: var(--gold); color:#111; border-color: var(--gold); font-weight:700; }
+    .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+    .cards { display:flex; gap:10px; flex-wrap:wrap; justify-content:center; margin: 8px 0; }
+    .card { width:72px; height:104px; border-radius:10px; background:#fff; color:#111; display:flex; flex-direction:column; justify-content:space-between; padding:6px; box-shadow: 0 6px 16px rgba(0,0,0,.4); font-weight:700; }
+    .card.mine { cursor:pointer; transition: transform .15s; }
+    .card.mine:hover:not(:disabled) { transform: translateY(-6px); }
+    .card.red { color:#b42318; }
+    .card .suit { font-size: 12px; font-weight:500; }
+    .card .rank { font-size: 26px; }
+    .table { min-height: 130px; display:flex; gap:12px; justify-content:center; align-items:center; flex-wrap:wrap; border:1px dashed #30363d; border-radius:14px; padding:12px; }
+    .muted { color: var(--muted); font-size: 14px; }
+    .score { font-size: 28px; font-weight: 700; }
+    .turn { color: var(--gold); font-weight: 700; }
+    .error { color: #ff7b72; min-height: 20px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Projeto Truco</h1>
+    <span class="muted" id="conn">desconectado</span>
+  </header>
+  <main>
+    <section class="panel" id="login" hidden>
+      <div id="googleLogin" class="row" hidden>
+        <button class="primary" id="googleBtn">Entrar com Google</button>
+      </div>
+      <div id="guestLogin" class="row" hidden>
+        <input id="guestName" maxlength="20" placeholder="Seu nome" autocomplete="nickname" />
+        <button id="guestBtn">Entrar como convidado</button>
+        <span class="muted">Modo de teste: sem login real.</span>
+      </div>
+      <p class="muted" id="loginStatus">Carregando…</p>
+    </section>
+
+    <section class="panel" id="lobby" hidden>
+      <div class="row">
+        <span id="who" class="muted"></span>
+        <button id="signout">Sair</button>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <button class="primary" id="create">Criar mesa</button>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <input id="code" maxlength="5" placeholder="Código da mesa" style="text-transform:uppercase" />
+        <button id="join">Entrar</button>
+      </div>
+      <p class="muted">Mesas de quatro jogadores: 2 contra 2. A partida começa quando a mesa estiver cheia.</p>
+    </section>
+
+    <section class="panel" id="ranking" hidden>
+      <h3 style="margin:0 0 8px">Ranking</h3>
+      <ol id="rankingList" class="muted" style="margin:0; padding-left:20px"></ol>
+      <p class="muted" id="rankingEmpty"></p>
+    </section>
+
+    <section class="panel" id="game" hidden>
+      <div class="row" style="justify-content:space-between">
+        <span>Mesa <strong id="roomCode"></strong></span>
+        <span class="score" id="score"></span>
+      </div>
+      <p class="muted" id="seats"></p>
+      <p class="turn" id="turnInfo"></p>
+      <div class="table" id="table"></div>
+      <p id="vira" class="muted"></p>
+      <h3 style="margin:12px 0 4px">Sua mão</h3>
+      <div class="cards" id="hand"></div>
+      <div class="row" style="justify-content:center; margin-top:8px">
+        <button class="truco" id="truco">Truco</button>
+        <button id="accept">Aceitar</button>
+        <button class="danger" id="run">Correr</button>
+        <button id="raise">Aumentar</button>
+      </div>
+      <p class="muted" id="stakeInfo"></p>
+      <p class="muted" id="results"></p>
+    </section>
+    <p class="error" id="error"></p>
+  </main>
+
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js" defer></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js" defer></script>
+  <script>
+    const SUIT_LABEL = { paus: 'paus', copas: 'copas', espadas: 'espadas', ouros: 'ouros' };
+    const SUIT_SYMBOL = { paus: '♣', copas: '♥', espadas: '♠', ouros: '♦' };
+    const RED = new Set(['copas', 'ouros']);
+    const $ = (id) => document.getElementById(id);
+
+    let ws = null;
+    let state = null;
+    let config = null;
+    let firebaseAuth = null;
+    let guestName = localStorage.getItem('truco.guestName') || '';
+    let joined = false;
+
+    async function getIdToken() {
+      if (!config) throw new Error('Configuração não carregada');
+      if (config.authMode === 'guest') return 'guest:' + (guestName || 'Convidado');
+      const user = firebaseAuth && firebaseAuth.currentUser;
+      if (!user) throw new Error('Entre com sua conta Google');
+      return user.getIdToken();
+    }
+
+    function showLoginFor(mode) {
+      $('login').hidden = false;
+      $('googleLogin').hidden = mode !== 'firebase';
+      $('guestLogin').hidden = mode !== 'guest';
+      $('loginStatus').textContent = mode === 'guest'
+        ? 'MODO DE TESTE: qualquer nome pode ser usado. Não é autenticação.'
+        : 'Entre com sua conta Google para jogar.';
+      $('lobby').hidden = true;
+      $('game').hidden = true;
+    }
+
+    async function loadConfig() {
+      const res = await fetch('/config', { cache: 'no-store' });
+      config = await res.json();
+      if (config.authMode === 'firebase' && window.firebase) {
+        firebase.initializeApp({
+          apiKey: config.firebase.apiKey,
+          authDomain: config.firebase.authDomain,
+          projectId: config.firebase.projectId,
+        });
+        firebaseAuth = firebase.auth();
+        firebaseAuth.onAuthStateChanged((user) => {
+          if (user) openSocket(); else { closeSocket(); showLoginFor('firebase'); }
+        });
+      } else if (config.authMode === 'firebase') {
+        $('loginStatus').textContent = 'Não foi possível carregar o login do Google. Verifique sua conexão.';
+        $('login').hidden = false;
+      } else {
+        showLoginFor('guest');
+        $('guestName').value = guestName;
+      }
+    }
+
+    function openSocket() {
+      closeSocket();
+      const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+      ws = new WebSocket(`${proto}://${location.host}`);
+      ws.onopen = async () => {
+        $('conn').textContent = 'conectado';
+        try {
+          send({ type: 'auth', idToken: await getIdToken() });
+        } catch (err) { showError(err.message); }
+      };
+      ws.onclose = (ev) => {
+        $('conn').textContent = 'desconectado';
+        if (ev.code !== 4000 && config && (config.authMode === 'guest' || (firebaseAuth && firebaseAuth.currentUser))) {
+          setTimeout(openSocket, 1500);
+        }
+      };
+      ws.onmessage = (ev) => {
+        const msg = JSON.parse(ev.data);
+        if (msg.type === 'welcome') {
+          $('who').textContent = `Você: ${msg.name}`;
+          $('lobby').hidden = false;
+          $('login').hidden = true;
+          $('guestLogin').hidden = true;
+          $('googleLogin').hidden = true;
+        } else if (msg.type === 'state') {
+          state = msg.state;
+          render();
+        } else if (msg.type === 'error') {
+          showError(msg.message);
+        }
+      };
+    }
+
+    async function loadRanking() {
+      try {
+        const res = await fetch('/ranking', { cache: 'no-store' });
+        const data = await res.json();
+        const list = $('rankingList');
+        list.innerHTML = '';
+        for (const e of data.entries || []) {
+          const li = document.createElement('li');
+          li.textContent = `${e.name} — ${e.wins} vitória(s) em ${e.games} partida(s)`;
+          list.appendChild(li);
+        }
+        $('rankingEmpty').textContent = (data.entries || []).length ? '' : 'Ainda não há partidas finalizadas.';
+        $('ranking').hidden = false;
+      } catch (_) { $('ranking').hidden = true; }
+    }
+
+    function closeSocket() {
+      if (ws) { const old = ws; ws = null; old.close(); }
+    }
+
+    function showError(message) {
+      $('error').textContent = message;
+      setTimeout(() => { if ($('error').textContent === message) $('error').textContent = ''; }, 4000);
+    }
+
+    function send(payload) { if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(payload)); }
+
+    function cardEl(card, clickable) {
+      const el = document.createElement('div');
+      el.className = 'card' + (RED.has(card.suit) ? ' red' : '') + (clickable ? ' mine' : '');
+      el.innerHTML = `<span class="rank">${card.rank}</span><span class="suit">${SUIT_SYMBOL[card.suit]} ${SUIT_LABEL[card.suit]}</span>`;
+      if (clickable) el.onclick = () => send({ type: 'play', card });
+      return el;
+    }
+
+    function nextRankLabel(rank) {
+      const order = ['4','5','6','7','Q','J','K','A','2','3'];
+      return order[(order.indexOf(rank) + 1) % order.length];
+    }
+
+    function render() {
+      if (!state) return;
+      $('lobby').hidden = true;
+      $('game').hidden = false;
+      $('roomCode').textContent = state.code;
+      $('score').textContent = `Nós ${state.score[0]} × ${state.score[1]} Eles`;
+      const seatNames = [0, 1, 2, 3].map((seat) => {
+        const p = state.players.find((x) => x.seat === seat);
+        return p ? `${p.name}${p.connected ? '' : ' (offline)'}` : '—';
+      });
+      $('seats').textContent = `Assentos: 0 ${seatNames[0]} · 1 ${seatNames[1]} · 2 ${seatNames[2]} · 3 ${seatNames[3]}`;
+
+      const hand = state.hand;
+      const myTurn = hand && hand.turn === state.you.seat && hand.status !== 'finished';
+      const pending = hand && hand.pendingTruco;
+      const responder = pending && pending.by % 2 !== state.you.seat % 2;
+
+      if (state.state === 'waiting') {
+        $('turnInfo').textContent = `Aguardando jogadores (${state.players.length}/4). Compartilhe o código ${state.code}.`;
+      } else if (state.state === 'finished') {
+        $('turnInfo').textContent = state.matchWinner === state.you.seat % 2 ? 'Você venceu a partida!' : 'Partida encerrada.';
+      } else if (pending) {
+        $('turnInfo').textContent = responder ? `Adversário pediu ${pending.value}. Responda.` : `Aguardando resposta ao pedido de ${pending.value}.`;
+      } else {
+        $('turnInfo').textContent = myTurn ? 'Sua vez de jogar.' : `Vez do assento ${hand ? hand.turn : '-'}.`;
+      }
+
+      const table = $('table');
+      table.innerHTML = '';
+      if (hand) for (const play of hand.currentRound) table.appendChild(cardEl(play.card, false));
+      $('vira').textContent = hand ? `Vira: ${hand.vira.rank} de ${SUIT_LABEL[hand.vira.suit]} (manilha ${nextRankLabel(hand.vira.rank)})` : '';
+
+      const handEl = $('hand');
+      handEl.innerHTML = '';
+      const canPlay = myTurn && !pending;
+      if (hand) for (const card of hand.myHand) handEl.appendChild(cardEl(card, canPlay));
+
+      $('truco').disabled = !(myTurn && !pending && hand && hand.stake < 12);
+      $('accept').disabled = !responder;
+      $('run').disabled = !responder;
+      $('raise').disabled = !(responder && pending && pending.value < 12);
+      $('stakeInfo').textContent = hand ? `Valor da mão: ${hand.stake}` : '';
+      $('results').textContent = state.handResults.length
+        ? 'Mãos: ' + state.handResults.map((r) => (r.winner === state.you.seat % 2 ? `+${r.points}` : `-${r.points}`)).join(' ')
+        : '';
+    }
+
+    $('truco').onclick = () => send({ type: 'truco' });
+    $('accept').onclick = () => send({ type: 'respond', action: 'accept' });
+    $('run').onclick = () => send({ type: 'respond', action: 'run' });
+    $('raise').onclick = () => send({ type: 'respond', action: 'raise' });
+    $('create').onclick = () => send({ type: 'create' });
+    $('join').onclick = () => send({ type: 'join', code: $('code').value.trim().toUpperCase() });
+    $('guestBtn').onclick = () => {
+      guestName = ($('guestName').value.trim() || 'Convidado').slice(0, 20);
+      localStorage.setItem('truco.guestName', guestName);
+      openSocket();
+    };
+    $('googleBtn').onclick = async () => {
+      try {
+        await firebaseAuth.signInWithPopup(new firebase.auth.GoogleAuthProvider());
+      } catch (err) { showError('Não foi possível entrar com o Google.'); }
+    };
+    $('signout').onclick = async () => {
+      closeSocket();
+      if (config && config.authMode === 'firebase' && firebaseAuth) await firebaseAuth.signOut();
+      else showLoginFor('guest');
+      state = null;
+    };
+
+    loadRanking();
+    loadConfig().catch(() => { $('loginStatus').textContent = 'Erro ao carregar a configuração do servidor.'; $('login').hidden = false; });
+  </script>
+</body>
+</html>
