@@ -249,6 +249,30 @@
     .pop button { text-align:left; }
     .info-body { line-height:1.55; max-height:60vh; overflow:auto; font-size:15px; }
     .info-body h3 { margin:14px 0 4px; }
+    .lobby-top { display:flex; justify-content:space-between; align-items:flex-end; gap:12px; flex-wrap:wrap; margin:8px 0 14px; }
+    .lobby-title { margin:0; font-size:30px; letter-spacing:-.5px; }
+    .online { font-size:14px; color:var(--muted); display:flex; align-items:center; gap:8px; }
+    .online b { color:var(--ink); }
+    .dot-live { width:8px; height:8px; border-radius:50%; background:#2dd4bf; box-shadow:0 0 0 4px rgba(45,212,191,.15); }
+    .modes { display:flex; gap:8px; margin-bottom:18px; }
+    .mode { border-radius:99px; padding:8px 16px; }
+    .mode.on { background:#2dd4bf; color:#06201c; border-color:transparent; font-weight:700; }
+    .mode[disabled] { opacity:.5; cursor:not-allowed; }
+    .variant { background:rgba(255,255,255,.03); border:1px solid #232a38; border-radius:16px; padding:16px; margin-bottom:14px; }
+    .variant.dim { opacity:.6; }
+    .variant-head { display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:12px; }
+    .variant-head h2 { margin:0; font-size:18px; }
+    .tag { font-size:12px; padding:4px 10px; border-radius:99px; border:1px solid #2a3140; color:var(--muted); }
+    .tag.live { color:#06201c; background:#2dd4bf; border-color:transparent; font-weight:700; }
+    .small { font-size:13px; }
+    .small-btn { padding:6px 12px; font-size:13px; }
+    .tiles { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:10px; }
+    .tile { text-align:left; display:flex; flex-direction:column; gap:6px; padding:16px; border-radius:14px; background:#171d2a; border:1px solid #2a3140; color:var(--ink); cursor:pointer; position:relative; }
+    .tile b { font-size:16px; }
+    .tile span { font-size:13px; color:var(--muted); line-height:1.4; }
+    .tile.hot { background:linear-gradient(135deg,#0f766e,#115e59); border-color:transparent; }
+    .tile.hot span { color:#ccfbf1; }
+    .tile.ghost input { position:absolute; top:14px; right:14px; }
   </style>
 </head>
 <body>
@@ -285,30 +309,60 @@
 
     <!-- LOBBY -->
     <section id="lobby" hidden>
-      <div class="hero">
-        <h1 id="hello">Bem-vindo</h1>
-        <p>Crie uma mesa e chame os amigos, ou entre em uma que está aberta.</p>
+      <div class="lobby-top">
+        <div>
+          <h1 class="lobby-title" id="hello">Bem-vindo</h1>
+          <p class="muted">Escolha uma variante e entre na partida.</p>
+        </div>
+        <div class="online"><span class="dot-live"></span><b id="onlineCount">0</b> jogando agora</div>
       </div>
 
-      <div class="card-panel">
-        <div class="row">
-          <button class="primary grow" id="quick">▶ Jogar agora</button>
-          <button class="primary grow" id="create">+ Criar mesa</button>
-          <label class="chk"><input type="checkbox" id="privateToggle" /> Mesa privada</label>
-          <input class="grow" id="code" maxlength="5" placeholder="Código da mesa" style="text-transform:uppercase" />
-          <button id="join">Entrar com código</button>
+      <div class="modes">
+        <button class="mode on" id="modeSolo" type="button">Solo</button>
+        <button class="mode" id="modeArena" type="button" disabled title="Em breve">Arena · em breve</button>
+      </div>
+
+      <div class="variant">
+        <div class="variant-head"><h2>Truco Paulista</h2><span class="tag live">disponível</span></div>
+        <div class="tiles">
+          <button class="tile hot" id="quick" type="button">
+            <b>Entrar numa mesa</b>
+            <span>Vai para a mesa pública com mais gente. Se não houver, cria uma nova.</span>
+          </button>
+          <button class="tile" id="create" type="button">
+            <b>Criar mesa</b>
+            <span>Monte a sua e convide os amigos com o código.</span>
+          </button>
+          <label class="tile ghost">
+            <b>Mesa privada</b>
+            <span>Só entra quem tiver o código.</span>
+            <input type="checkbox" id="privateToggle" />
+          </label>
         </div>
       </div>
 
-      <div class="card-panel">
-        <div class="section-title">
+      <div class="variant dim">
+        <div class="variant-head"><h2>Truco Mineiro</h2><span class="tag">em breve</span></div>
+        <p class="muted small">Regras e manilhas próprias do mineiro ainda não estão no servidor.</p>
+      </div>
+
+      <div class="variant">
+        <div class="variant-head"><h2>Entrar com código</h2></div>
+        <div class="row">
+          <input class="grow" id="code" maxlength="5" placeholder="Código da mesa" style="text-transform:uppercase" />
+          <button id="join" type="button">Entrar</button>
+        </div>
+      </div>
+
+      <div class="variant">
+        <div class="variant-head">
           <h2>Mesas abertas</h2>
-          <button id="refresh" style="padding:7px 12px">Atualizar</button>
+          <button id="refresh" type="button" class="small-btn">Atualizar</button>
         </div>
         <div class="rooms" id="rooms"></div>
         <div class="empty" id="roomsEmpty" hidden>
           <b>Nenhuma mesa aberta agora</b>
-          Crie uma e compartilhe o código com seus amigos.
+          Entre rápido ou crie uma e compartilhe o código.
         </div>
       </div>
 
@@ -660,6 +714,7 @@
           list.appendChild(row);
         }
         show('roomsEmpty', rooms.length === 0);
+        $('onlineCount').textContent = String(rooms.reduce((n, r) => n + r.seated, 0));
       } catch (_) { /* silencioso */ }
     }
     function currentJoin(code) { send({ type: 'join', code }); }
