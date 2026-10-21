@@ -1,3 +1,4 @@
+import { parseAvatar, type Avatar } from './avatar.js';
 import { type Card, RANKS, type Rank, SUITS, type Suit, type TrucoAction } from '@projeto-truco/game-engine';
 
 /** Mensagens que o cliente envia ao servidor. */
@@ -7,7 +8,8 @@ export type ClientMessage =
   | { type: 'join'; code: string }
   | { type: 'play'; card: Card }
   | { type: 'truco' }
-  | { type: 'respond'; action: TrucoAction };
+  | { type: 'respond'; action: TrucoAction }
+  | { type: 'profile'; avatar: Avatar };
 
 const TRUCO_ACTIONS: readonly TrucoAction[] = ['accept', 'run', 'raise'];
 
@@ -37,6 +39,8 @@ export function parseClientMessage(raw: unknown): ClientMessage {
       }
       return { type: 'auth', idToken };
     }
+    case 'profile':
+      return { type: 'profile', avatar: parseAvatar(msg['avatar']) };
     case 'create':
       return { type: 'create' };
     case 'join': {

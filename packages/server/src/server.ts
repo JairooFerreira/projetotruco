@@ -4,6 +4,7 @@ import { type AddressInfo } from 'node:net';
 import { fileURLToPath } from 'node:url';
 import { WebSocket, WebSocketServer } from 'ws';
 import type { TokenVerifier } from './auth.js';
+import { DEFAULT_AVATAR, type Avatar } from './avatar.js';
 import { parseClientMessage, type ClientMessage } from './protocol.js';
 import { type Room, type RoomListener, RoomRegistry } from './room.js';
 import type { MatchStore } from './store.js';
@@ -32,6 +33,7 @@ interface Session {
   uid: string | null;
   name: string | null;
   roomCode: string | null;
+  avatar: Avatar;
 }
 
 const INDEX_PATH = fileURLToPath(new URL('../public/index.html', import.meta.url));
@@ -104,8 +106,9 @@ export function startGameServer(options: GameServerOptions): Promise<GameServer>
     }
   };
 
-  const attachToRoom = (session: Session, room: Room, uid: string, name: string): void => {
+  const attachToRoom = (session: Session, room: Room, uid: string, name: string, avatar: Avatar): void => {
     room.join(uid, name);
+    room.setAvatar(uid, avatar);
     session.roomCode = room.code;
     connections.set(uid, session);
     broadcastRoom(room);
@@ -123,7 +126,8 @@ export function startGameServer(options: GameServerOptions): Promise<GameServer>
         previous.socket.close(4000, 'Conectado em outra janela');
       }
       if (store) await store.saveUser(identity.uid, identity.name);
-      send(session, { type: 'welcome', uid: identity.uid, name: identity.name });
+      session.avatar = store ? await store.getAvatar(identity.uid) : { ...DEFAULT_AVATAR };
+      send(session, { type: 'welcome', uid: identity.uid, name: identity.name, avatar: session.avatar });
       return;
     }
 
@@ -134,14 +138,22 @@ export function startGameServer(options: GameServerOptions): Promise<GameServer>
     }
 
     switch (msg.type) {
+      case 'profile': {
+        session.avatar = msg.avatar;
+        if (store) await store.saveAvatar(uid, msg.avatar);
+        const room = session.roomCode ? registry.get(session.roomCode) : undefined;
+        if (room) { room.setAvatar(uid, msg.avatar); broadcastRoom(room); }
+        send(session, { type: 'avatar', avatar: msg.avatar });
+        return;
+      }
       case 'create': {
-        attachToRoom(session, registry.create(), uid, name);
+        attachToRoom(session, registry.create(), uid, name, session.avatar);
         return;
       }
       case 'join': {
         const room = registry.get(msg.code);
         if (!room) throw new Error('Sala não encontrada');
-        attachToRoom(session, room, uid, name);
+        attachToRoom(session, room, uid, name, session.avatar);
         return;
       }
       case 'play':
@@ -159,7 +171,7 @@ export function startGameServer(options: GameServerOptions): Promise<GameServer>
   };
 
   wss.on('connection', (socket) => {
-    const session: Session = { socket, uid: null, name: null, roomCode: null };
+    const session: Session = { socket, uid: null, name: null, roomCode: null, avatar: { ...DEFAULT_AVATAR } };
     sessions.add(session);
 
     socket.on('message', (data) => {

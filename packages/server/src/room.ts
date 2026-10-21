@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { DEFAULT_AVATAR, type Avatar } from './avatar.js';
 import {
   type Card,
   EMPTY_SCORE,
@@ -23,6 +24,7 @@ export interface RoomPlayer {
   readonly name: string;
   readonly seat: Seat;
   connected: boolean;
+  avatar: Avatar;
 }
 
 export interface HandResult {
@@ -35,7 +37,7 @@ export interface RoomSnapshot {
   readonly code: string;
   readonly state: RoomState;
   readonly you: { readonly playerId: string; readonly seat: Seat };
-  readonly players: ReadonlyArray<{ seat: Seat; name: string; connected: boolean }>;
+  readonly players: ReadonlyArray<{ seat: Seat; name: string; connected: boolean; avatar: Avatar }>;
   readonly dealer: Seat;
   readonly score: Score;
   readonly matchWinner: Team | null;
@@ -113,7 +115,7 @@ export class Room {
       throw new Error('A partida já começou');
     }
     const seat = this.players.length as Seat;
-    this.players.push({ playerId, name, seat, connected: true });
+    this.players.push({ playerId, name, seat, connected: true, avatar: { ...DEFAULT_AVATAR } });
     if (this.players.length === ROOM_SIZE) {
       this.state = 'playing';
       this.matchId = randomUUID();
@@ -121,6 +123,10 @@ export class Room {
       this.emit((l) => l.matchStarted(this.matchId as string, this.code, this.players));
     }
     return seat;
+  }
+
+  setAvatar(playerId: string, avatar: Avatar): void {
+    this.findPlayer(playerId).avatar = avatar;
   }
 
   setConnected(playerId: string, connected: boolean): void {
@@ -164,7 +170,7 @@ export class Room {
       code: this.code,
       state: this.state,
       you: { playerId, seat: me.seat },
-      players: this.players.map((p) => ({ seat: p.seat, name: p.name, connected: p.connected })),
+      players: this.players.map((p) => ({ seat: p.seat, name: p.name, connected: p.connected, avatar: p.avatar })),
       dealer: this.dealer,
       score: this.score,
       matchWinner: this.winner,

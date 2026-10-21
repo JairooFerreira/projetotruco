@@ -190,6 +190,28 @@
     @keyframes rise { from { transform: translateY(8px); opacity: 0; } to { transform: none; opacity: 1; } }
     @keyframes bump { 0% { transform: scale(1); } 40% { transform: scale(1.08); } 100% { transform: scale(1); } }
 
+    /* PERSONAGEM */
+    .avatar-btn { display:inline-flex; align-items:center; gap:8px; padding:6px 10px 6px 6px; border-radius:999px; }
+    .mini { width: 30px; height: 30px; border-radius: 50%; background: rgba(0,0,0,.25); border: 2px solid var(--gold); display:grid; place-items:center; overflow:hidden; }
+    .mini svg { width: 100%; height: 100%; display:block; }
+    .seat .av { width: 56px; height: 56px; margin: 0 auto 4px; border-radius: 50%; overflow: hidden; border: 3px solid var(--gold); background: rgba(0,0,0,.3); box-shadow: 0 6px 14px rgba(0,0,0,.35); }
+    .seat .av svg { width: 100%; height: 100%; display:block; }
+    .seat .who { margin-top: 0; }
+    .modal { position: fixed; inset: 0; background: rgba(4,8,18,.7); backdrop-filter: blur(4px); display: none; place-items: center; z-index: 40; padding: 16px; }
+    .modal.open { display: grid; }
+    .sheet { width: min(560px, 100%); max-height: 90vh; overflow: auto; background: #111a33; border: 1px solid var(--line); border-radius: 20px; padding: 18px; box-shadow: 0 30px 60px rgba(0,0,0,.5); animation: rise .3s ease both; }
+    .sheet h2 { margin: 0 0 12px; font-size: 20px; }
+    .editor { display: grid; grid-template-columns: 180px 1fr; gap: 16px; align-items: start; }
+    .preview { width: 180px; height: 180px; border-radius: 50%; border: 6px solid var(--gold); background: radial-gradient(circle at 50% 35%, rgba(255,255,255,.12), rgba(0,0,0,.3)); overflow: hidden; }
+    .preview svg { width: 100%; height: 100%; display: block; }
+    .opt-group { margin-bottom: 12px; }
+    .opt-group > div:first-child { font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+    .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+    .chip { padding: 7px 11px; font-size: 13px; border-radius: 999px; }
+    .chip.on { border-color: var(--gold); background: rgba(245,196,81,.15); color: var(--gold); }
+    .soundbtn { padding: 7px 11px; font-size: 13px; }
+    @media (max-width: 640px) { .editor { grid-template-columns: 1fr; justify-items: center; } }
+
     /* MOBILE */
     @media (max-width: 640px) {
       .table-wrap { aspect-ratio: auto; height: 460px; border-radius: 40px; }
@@ -212,7 +234,11 @@
 <body>
   <header>
     <div class="brand"><div class="logo">T</div><span>Projeto Truco</span></div>
-    <div class="status"><span class="dot" id="dot"></span><span id="conn">desconectado</span></div>
+    <div class="status">
+      <button class="soundbtn" id="soundBtn" title="Ligar/desligar sons">🔊</button>
+      <button class="avatar-btn" id="avatarBtn" title="Meu personagem"><span class="mini" id="miniAvatar"></span><span>Personagem</span></button>
+      <span class="dot" id="dot"></span><span id="conn">desconectado</span>
+    </div>
   </header>
 
   <main>
@@ -305,6 +331,20 @@
     </section>
   </main>
 
+  <div class="modal" id="editorModal" role="dialog" aria-modal="true" aria-labelledby="editorTitle">
+    <div class="sheet">
+      <h2 id="editorTitle">Meu personagem</h2>
+      <div class="editor">
+        <div class="preview" id="preview"></div>
+        <div id="opts"></div>
+      </div>
+      <div class="row" style="justify-content:flex-end; margin-top:14px">
+        <button id="editorCancel">Cancelar</button>
+        <button class="primary" id="editorSave">Salvar</button>
+      </div>
+    </div>
+  </div>
+
   <div class="toast" id="toast"></div>
 
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js" defer></script>
@@ -319,6 +359,128 @@
     let guestName = localStorage.getItem('truco.guestName') || '';
     let lastRoomCode = null;
     let reconnectTimer = null;
+
+    /* ---------- personagem ---------- */
+    const AVATAR_OPTIONS = {
+      skin: { clara: '#f1c9a5', morena: '#c68a5b', negra: '#8d5a3b', parda: '#b07c52', oliva: '#d6a77a' },
+      hair: { curto: 'short', longo: 'long', careca: 'none', cacheado: 'curly' },
+      hairColor: { preto: '#1d1b1b', castanho: '#5a3a22', loiro: '#e7c36a', ruivo: '#b5482a', grisalho: '#bfc3c9' },
+      accessory: { nenhum: null, oculos: 'glasses', chapeu: 'hat', bone: 'cap' },
+      frame: { verde: '#2fbf71', dourado: '#f5c451', azul: '#4da3ff', roxo: '#a66bff', vermelho: '#ff5b5b' },
+    };
+    const LABELS = {
+      skin: 'Tom de pele', hair: 'Cabelo', hairColor: 'Cor do cabelo', accessory: 'Acessório', frame: 'Moldura',
+    };
+    const DEFAULT_AVATAR = { skin: 'clara', hair: 'curto', hairColor: 'castanho', accessory: 'nenhum', frame: 'dourado' };
+    let myAvatar = { ...DEFAULT_AVATAR };
+    let draft = null;
+
+    function avatarSvg(av) {
+      const skin = AVATAR_OPTIONS.skin[av.skin] || AVATAR_OPTIONS.skin.clara;
+      const hairColor = AVATAR_OPTIONS.hairColor[av.hairColor] || '#5a3a22';
+      const hairKind = AVATAR_OPTIONS.hair[av.hair] || 'short';
+      const acc = AVATAR_OPTIONS.accessory[av.accessory];
+      let hair = '';
+      if (hairKind === 'short') hair = `<path d="M30 42 Q50 12 70 42 L70 48 Q50 34 30 48 Z" fill="${hairColor}"/>`;
+      if (hairKind === 'long') hair = `<path d="M26 50 Q50 8 74 50 L78 92 L70 92 L68 56 Q50 40 32 56 L30 92 L22 92 Z" fill="${hairColor}"/>`;
+      if (hairKind === 'curly') hair = `<g fill="${hairColor}"><circle cx="34" cy="34" r="9"/><circle cx="46" cy="27" r="10"/><circle cx="60" cy="28" r="10"/><circle cx="70" cy="38" r="9"/><circle cx="28" cy="46" r="7"/><circle cx="72" cy="50" r="7"/></g>`;
+      let extra = '';
+      if (acc === 'glasses') extra = `<g fill="none" stroke="#222" stroke-width="3"><circle cx="40" cy="56" r="7"/><circle cx="60" cy="56" r="7"/><path d="M47 56 H53"/></g>`;
+      if (acc === 'hat') extra = `<path d="M24 36 Q50 6 76 36 Z" fill="#2b2b3d"/><rect x="20" y="34" width="60" height="6" rx="3" fill="#1c1c2a"/>`;
+      if (acc === 'cap') extra = `<path d="M30 40 Q50 18 70 40 Z" fill="#1f6feb"/><rect x="28" y="38" width="36" height="5" rx="2.5" fill="#1558b8"/><path d="M62 42 H82 V47 H60 Z" fill="#1558b8"/>`;
+      return `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <rect width="100" height="100" fill="rgba(0,0,0,0)"/>
+        <path d="M20 100 Q50 62 80 100 Z" fill="#2e4a7a"/>
+        <rect x="44" y="62" width="12" height="14" fill="${skin}"/>
+        <ellipse cx="50" cy="48" rx="22" ry="25" fill="${skin}"/>
+        ${hair}
+        <circle cx="42" cy="50" r="2.2" fill="#1a1a1a"/><circle cx="58" cy="50" r="2.2" fill="#1a1a1a"/>
+        <path d="M42 64 Q50 70 58 64" fill="none" stroke="#7a3b2a" stroke-width="2.4" stroke-linecap="round"/>
+        ${extra}
+      </svg>`;
+    }
+    function applyFrame(el, av) {
+      el.style.borderColor = AVATAR_OPTIONS.frame[av.frame] || '#f5c451';
+    }
+    function renderMiniAvatar() {
+      const el = $('miniAvatar');
+      el.innerHTML = avatarSvg(myAvatar);
+      applyFrame(el, myAvatar);
+    }
+    function buildEditor() {
+      const opts = $('opts');
+      opts.innerHTML = '';
+      for (const key of Object.keys(AVATAR_OPTIONS)) {
+        const group = document.createElement('div');
+        group.className = 'opt-group';
+        group.innerHTML = `<div>${LABELS[key]}</div><div class="chips"></div>`;
+        const chips = group.querySelector('.chips');
+        for (const value of Object.keys(AVATAR_OPTIONS[key])) {
+          const b = document.createElement('button');
+          b.className = 'chip' + (draft[key] === value ? ' on' : '');
+          b.textContent = value;
+          b.onclick = () => { draft[key] = value; buildEditor(); };
+          chips.appendChild(b);
+        }
+        opts.appendChild(group);
+      }
+      const pv = $('preview');
+      pv.innerHTML = avatarSvg(draft);
+      applyFrame(pv, draft);
+    }
+    function openEditor() { draft = { ...myAvatar }; buildEditor(); $('editorModal').classList.add('open'); }
+    function closeEditor() { $('editorModal').classList.remove('open'); }
+    function saveAvatar() {
+      if (!draft) return;
+      send({ type: 'profile', avatar: draft });
+      closeEditor();
+      toast('Personagem salvo', 'ok');
+    }
+    function avatarFor(p) {
+      const av = (p && p.avatar) || DEFAULT_AVATAR;
+      return `<div class="av" style="border-color:${AVATAR_OPTIONS.frame[av.frame] || '#f5c451'}">${avatarSvg(av)}</div>`;
+    }
+
+    /* ---------- sons (sintetizados, sem arquivos externos) ---------- */
+    let audioCtx = null;
+    let soundOn = localStorage.getItem('truco.sound') !== 'off';
+    function ctx() {
+      if (!audioCtx) { const C = window.AudioContext || window.webkitAudioContext; if (!C) return null; audioCtx = new C(); }
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      return audioCtx;
+    }
+    function tone(freq, dur, type, vol, when) {
+      const c = ctx(); if (!c) return;
+      const t0 = c.currentTime + (when || 0);
+      const o = c.createOscillator(); const g = c.createGain();
+      o.type = type || 'sine'; o.frequency.value = freq;
+      g.gain.setValueAtTime(0.0001, t0);
+      g.gain.exponentialRampToValueAtTime(vol || 0.15, t0 + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+      o.connect(g); g.connect(c.destination);
+      o.start(t0); o.stop(t0 + dur + 0.02);
+    }
+    function noise(dur, vol) {
+      const c = ctx(); if (!c) return;
+      const buf = c.createBuffer(1, Math.floor(c.sampleRate * dur), c.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length);
+      const src = c.createBufferSource(); const g = c.createGain();
+      src.buffer = buf; g.gain.value = vol || 0.25;
+      src.connect(g); g.connect(c.destination); src.start();
+    }
+    const SFX = {
+      card() { if (soundOn) noise(0.08, 0.35); },
+      truco() { if (soundOn) { tone(520, 0.12, 'square', 0.12); tone(780, 0.18, 'square', 0.12, 0.12); } },
+      win() { if (soundOn) { [523, 659, 784, 1047].forEach((f, i) => tone(f, 0.22, 'triangle', 0.16, i * 0.11)); } },
+      lose() { if (soundOn) { tone(330, 0.25, 'sawtooth', 0.08); tone(247, 0.35, 'sawtooth', 0.08, 0.2); } },
+      notify() { if (soundOn) tone(880, 0.12, 'sine', 0.1); },
+    };
+    function setSound(on) {
+      soundOn = on;
+      localStorage.setItem('truco.sound', on ? 'on' : 'off');
+      $('soundBtn').textContent = on ? '🔊' : '🔇';
+    }
 
     /* ---------- utilitários ---------- */
     function toast(msg, kind) {
@@ -369,10 +531,13 @@
       ws.onmessage = (ev) => {
         const msg = JSON.parse(ev.data);
         if (msg.type === 'welcome') {
+          if (msg.avatar) { myAvatar = msg.avatar; renderMiniAvatar(); }
           $('hello').textContent = `Olá, ${msg.name}`;
           showScreen('lobby');
           refreshRooms();
           if (lastRoomCode) send({ type: 'join', code: lastRoomCode });
+        } else if (msg.type === 'avatar') {
+          myAvatar = msg.avatar; renderMiniAvatar();
         } else if (msg.type === 'state') {
           const prev = state;
           state = msg.state;
@@ -460,7 +625,8 @@
         const tag = !p ? '<span class="who">aguardando…</span>'
           : `<span class="who ${turn === seat && state.state === 'playing' ? 'turn' : ''}">${escapeHtml(p.name)}${mine ? ' (você)' : ''}${p.connected ? '' : ' · offline'}</span>`;
         const cards = state.hand && p ? `<div class="pile">${state.hand.otherPlayersCardCounts[seat] ?? (mine ? state.hand.myHand.length : '')} cartas</div>` : '';
-        el.innerHTML = tag + (seat === state.you.seat ? '' : cards);
+        const avatar = p ? avatarFor(p) : '';
+        el.innerHTML = avatar + tag + (seat === state.you.seat ? '' : cards);
       }
     }
     function render(prev) {
@@ -545,6 +711,18 @@
         $('results').appendChild(d);
       }
 
+      // sons
+      if (prev && prev.hand && hand) {
+        if (hand.currentRound.length > prev.hand.currentRound.length) SFX.card();
+        if (!prev.hand.pendingTruco && pending) { SFX.truco(); }
+      }
+      if (prev && prev.state !== 'finished' && state.state === 'finished') {
+        state.matchWinner === mySide ? SFX.win() : SFX.lose();
+      }
+      if (prev && prev.hand && hand && prev.hand.status !== 'finished' && hand.status === 'finished') {
+        if (state.state !== 'finished') (hand.winner === mySide ? SFX.notify() : SFX.lose());
+      }
+
       // avisos pontuais
       if (prev && prev.hand && hand) {
         if (prev.hand.pendingTruco == null && pending) toast(`Pedido de ${pending.value}!`, '');
@@ -577,6 +755,12 @@
       try { await navigator.clipboard.writeText(state.code); toast('Código copiado', 'ok'); }
       catch (_) { toast('Código: ' + state.code); }
     };
+    $('avatarBtn').onclick = () => openEditor();
+    $('editorCancel').onclick = closeEditor;
+    $('editorSave').onclick = saveAvatar;
+    $('editorModal').addEventListener('click', (e) => { if (e.target.id === 'editorModal') closeEditor(); });
+    $('soundBtn').onclick = () => { ctx(); setSound(!soundOn); };
+    setSound(soundOn);
     $('truco').onclick = () => send({ type: 'truco' });
     $('accept').onclick = () => send({ type: 'respond', action: 'accept' });
     $('run').onclick = () => send({ type: 'respond', action: 'run' });
@@ -617,6 +801,7 @@
       }
     }
 
+    renderMiniAvatar();
     loadRanking();
     loadConfig().catch(() => { showScreen('login'); $('loginStatus').textContent = 'Erro ao carregar a configuração do servidor.'; });
     setInterval(() => { if (!$('lobby').hidden) refreshRooms(); }, 5000);

@@ -1,5 +1,6 @@
 import type { Pool } from 'pg';
 import type { Team, Seat } from '@projeto-truco/game-engine';
+import { DEFAULT_AVATAR, parseAvatar, type Avatar } from './avatar.js';
 
 export interface RankingEntry {
   readonly uid: string;
@@ -21,6 +22,8 @@ export interface MatchStore {
   handFinished(matchId: string, index: number, winner: Team, points: number): Promise<void>;
   matchFinished(matchId: string, winner: Team, score: { 0: number; 1: number }): Promise<void>;
   ranking(limit: number): Promise<RankingEntry[]>;
+  getAvatar(uid: string): Promise<Avatar>;
+  saveAvatar(uid: string, avatar: Avatar): Promise<void>;
 }
 
 /** Implementação em memória, usada em testes e quando o banco não está configurado. */
@@ -48,6 +51,16 @@ export class MemoryMatchStore implements MatchStore {
     if (!match) throw new Error('Partida desconhecida');
     match.winner = winner;
     match.score = score;
+  }
+
+  readonly avatars = new Map<string, Avatar>();
+
+  async getAvatar(uid: string): Promise<Avatar> {
+    return this.avatars.get(uid) ?? { ...DEFAULT_AVATAR };
+  }
+
+  async saveAvatar(uid: string, avatar: Avatar): Promise<void> {
+    this.avatars.set(uid, parseAvatar(avatar));
   }
 
   async ranking(limit: number): Promise<RankingEntry[]> {
@@ -114,6 +127,20 @@ export class PgMatchStore implements MatchStore {
        WHERE id = $1 AND finished_at IS NULL`,
       [matchId, winner, score[0], score[1]],
     );
+  }
+
+  async getAvatar(uid: string): Promise<Avatar> {
+    const { rows } = await this.pool.query<{ avatar: unknown }>('SELECT avatar FROM users WHERE uid = $1', [uid]);
+    const raw = rows[0]?.avatar;
+    try {
+      return parseAvatar(raw ?? {});
+    } catch {
+      return { ...DEFAULT_AVATAR };
+    }
+  }
+
+  async saveAvatar(uid: string, avatar: Avatar): Promise<void> {
+    await this.pool.query('UPDATE users SET avatar = $2, updated_at = now() WHERE uid = $1', [uid, JSON.stringify(parseAvatar(avatar))]);
   }
 
   async ranking(limit: number): Promise<RankingEntry[]> {
