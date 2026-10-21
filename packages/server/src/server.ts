@@ -3,9 +3,13 @@ import { createServer, type Server } from 'node:http';
 import { type AddressInfo } from 'node:net';
 import { fileURLToPath } from 'node:url';
 import { WebSocket, WebSocketServer } from 'ws';
+import { teamOf } from '@projeto-truco/game-engine';
 import type { TokenVerifier } from './auth.js';
 import { DEFAULT_AVATAR, type Avatar } from './avatar.js';
 import { parseClientMessage, type ClientMessage } from './protocol.js';
+import { CHAT_PRESETS, EMOTES } from './chat.js';
+import { progressView, xpForResult } from './progress.js';
+import { RateLimiter } from './rate-limit.js';
 import { type Room, type RoomListener, RoomRegistry } from './room.js';
 import type { MatchStore } from './store.js';
 
@@ -23,6 +27,8 @@ export interface GameServerOptions {
   readonly port?: number;
   readonly host?: string;
   readonly verifier: TokenVerifier;
+  /** uids com acesso ao painel /admin/overview. */
+  readonly adminUids?: readonly string[];
   readonly store?: MatchStore;
   readonly publicConfig?: PublicConfig;
   readonly registry?: RoomRegistry;
@@ -34,7 +40,28 @@ interface Session {
   name: string | null;
   roomCode: string | null;
   avatar: Avatar;
+  readonly limiter: RateLimiter;
 }
+
+const SECURITY_HEADERS: Record<string, string> = {
+  'x-content-type-options': 'nosniff',
+  'x-frame-options': 'DENY',
+  'referrer-policy': 'strict-origin-when-cross-origin',
+  'content-security-policy': [
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-inline' https://www.gstatic.com https://apis.google.com",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "font-src 'self' https://fonts.gstatic.com data:",
+    "img-src 'self' data:",
+    "connect-src 'self' wss: ws: https://*.googleapis.com https://*.firebaseio.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://www.googleapis.com",
+    "frame-src https://*.firebaseapp.com https://accounts.google.com",
+    "object-src 'none'",
+    "base-uri 'none'",
+    "frame-ancestors 'none'",
+  ].join('; '),
+};
+
+const ADMIN_PATH = '/admin/overview';
 
 const INDEX_PATH = fileURLToPath(new URL('../public/index.html', import.meta.url));
 
@@ -50,7 +77,10 @@ export function startGameServer(options: GameServerOptions): Promise<GameServer>
   const connections = new Map<string, Session>();
   const config = JSON.stringify(options.publicConfig ?? { authMode: verifier.mode });
 
+  const admins = new Set(options.adminUids ?? []);
+
   const http: Server = createServer((req, res) => {
+    for (const [name, value] of Object.entries(SECURITY_HEADERS)) res.setHeader(name, value);
     if (req.method === 'GET' && (req.url === '/' || req.url === '/index.html')) {
       readFile(INDEX_PATH)
         .then((html) => {
@@ -79,6 +109,30 @@ export function startGameServer(options: GameServerOptions): Promise<GameServer>
     if (req.method === 'GET' && req.url === '/rooms') {
       res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
       res.end(JSON.stringify({ rooms: registry.openRooms() }));
+      return;
+    }
+    if (req.method === 'GET' && req.url === ADMIN_PATH) {
+      void (async () => {
+        const token = (req.headers['authorization'] ?? '').replace(/^Bearer\s+/i, '');
+        const json = (status: number, body: unknown): void => {
+          res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
+          res.end(JSON.stringify(body));
+        };
+        if (!token) return json(401, { error: 'Não autorizado' });
+        try {
+          const identity = await verifier.verify(token);
+          if (!admins.has(identity.uid)) return json(403, { error: 'Acesso negado' });
+          const reports = store ? await store.listReports(100) : [];
+          json(200, {
+            openRooms: registry.openRooms().length,
+            connectedPlayers: connections.size,
+            sessions: sessions.size,
+            reports,
+          });
+        } catch {
+          json(401, { error: 'Não autorizado' });
+        }
+      })();
       return;
     }
     if (req.method === 'GET' && req.url === '/config') {
@@ -147,7 +201,40 @@ export function startGameServer(options: GameServerOptions): Promise<GameServer>
         return;
       }
       case 'create': {
-        attachToRoom(session, registry.create(), uid, name, session.avatar);
+        attachToRoom(session, registry.create({ isPrivate: msg.isPrivate }), uid, name, session.avatar);
+        return;
+      }
+      case 'quick': {
+        const room = registry.findQuickRoom() ?? registry.create();
+        attachToRoom(session, room, uid, name, session.avatar);
+        return;
+      }
+      case 'me': {
+        const progress = store ? await store.getProgress(uid) : { xp: 0, games: 0, wins: 0 };
+        send(session, { type: 'progress', progress: progressView(progress) });
+        return;
+      }
+      case 'chat':
+      case 'emote': {
+        if (!session.limiter.allow()) throw new Error('Calma aí: muitas ações em pouco tempo');
+        const room = session.roomCode ? registry.get(session.roomCode) : undefined;
+        if (!room || !room.playerIds().includes(uid)) throw new Error('Você não está em uma sala');
+        const text = msg.type === 'chat' ? CHAT_PRESETS[msg.preset] : EMOTES[msg.index];
+        const kind = msg.type === 'chat' ? 'chat' : 'emote';
+        for (const memberUid of room.playerIds()) {
+          const target = connections.get(memberUid);
+          if (target) send(target, { type: 'message', kind, from: uid, name, text });
+        }
+        return;
+      }
+      case 'report': {
+        if (!session.limiter.allow()) throw new Error('Calma aí: muitas ações em pouco tempo');
+        const room = session.roomCode ? registry.get(session.roomCode) : undefined;
+        if (!room || !room.playerIds().includes(msg.targetUid) || msg.targetUid === uid) {
+          throw new Error('Denúncia inválida para esta sala');
+        }
+        if (store) await store.addReport({ reporterUid: uid, targetUid: msg.targetUid, reason: msg.reason, roomCode: room.code });
+        send(session, { type: 'reported' });
         return;
       }
       case 'join': {
@@ -171,7 +258,14 @@ export function startGameServer(options: GameServerOptions): Promise<GameServer>
   };
 
   wss.on('connection', (socket) => {
-    const session: Session = { socket, uid: null, name: null, roomCode: null, avatar: { ...DEFAULT_AVATAR } };
+    const session: Session = {
+      socket,
+      uid: null,
+      name: null,
+      roomCode: null,
+      avatar: { ...DEFAULT_AVATAR },
+      limiter: new RateLimiter(8, 5_000),
+    };
     sessions.add(session);
 
     socket.on('message', (data) => {
@@ -227,6 +321,13 @@ function toListener(store: MatchStore): RoomListener {
       ),
     handFinished: (matchId, index, result) =>
       store.handFinished(matchId, index, result.winner, result.points),
-    matchFinished: (matchId, winner, score) => store.matchFinished(matchId, winner, score),
+    matchFinished: async (matchId, winner, score, players) => {
+      await store.matchFinished(matchId, winner, score);
+      // XP só para jogadores com conta (uid verificado); a dupla vencedora é o time de `winner`.
+      for (const p of players) {
+        const won = teamOf(p.seat) === winner;
+        await store.recordResult(p.playerId, won, xpForResult(won));
+      }
+    },
   };
 }

@@ -229,6 +229,26 @@
     @media (prefers-reduced-motion: reduce) {
       *, *::before, *::after { animation: none !important; transition: none !important; }
     }
+    .chk { display:flex; gap:6px; align-items:center; color:var(--muted); font-size:14px; }
+    .progress-head { display:flex; gap:14px; align-items:center; flex-wrap:wrap; }
+    .level { font-size:28px; font-weight:800; }
+    .xpbar { height:10px; border-radius:99px; background:rgba(255,255,255,.08); overflow:hidden; flex:1; min-width:160px; }
+    .xpbar > i { display:block; height:100%; background:linear-gradient(90deg,#f5c542,#ff8a3d); }
+    .badges { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
+    .badge { padding:6px 10px; border-radius:99px; border:1px solid var(--line,#2a3140); font-size:13px; color:var(--muted); }
+    .badge.on { color:var(--ink); border-color:#f5c542; }
+    .chatbar { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
+    .chatbar button { padding:6px 10px; font-size:13px; }
+    .feed { position:fixed; left:16px; bottom:16px; display:flex; flex-direction:column; gap:6px; z-index:50; pointer-events:none; max-width:70vw; }
+    .feed > div { background:rgba(10,14,22,.92); border:1px solid #2a3140; border-radius:10px; padding:6px 10px; font-size:14px; animation: fadein .2s ease; }
+    .feed .emo { font-size:26px; padding:2px 8px; }
+    @keyframes fadein { from { opacity:0; transform:translateY(4px);} to { opacity:1; transform:none;} }
+    .footer { text-align:center; margin:28px 0 8px; font-size:13px; color:var(--muted); }
+    .footer a { color:var(--muted); margin:0 8px; cursor:pointer; text-decoration:underline; }
+    .pop { position:fixed; z-index:60; background:#121723; border:1px solid #2a3140; border-radius:10px; padding:6px; display:flex; flex-direction:column; gap:4px; min-width:170px; }
+    .pop button { text-align:left; }
+    .info-body { line-height:1.55; max-height:60vh; overflow:auto; font-size:15px; }
+    .info-body h3 { margin:14px 0 4px; }
   </style>
 </head>
 <body>
@@ -272,7 +292,9 @@
 
       <div class="card-panel">
         <div class="row">
+          <button class="primary grow" id="quick">▶ Jogar agora</button>
           <button class="primary grow" id="create">+ Criar mesa</button>
+          <label class="chk"><input type="checkbox" id="privateToggle" /> Mesa privada</label>
           <input class="grow" id="code" maxlength="5" placeholder="Código da mesa" style="text-transform:uppercase" />
           <button id="join">Entrar com código</button>
         </div>
@@ -288,6 +310,16 @@
           <b>Nenhuma mesa aberta agora</b>
           Crie uma e compartilhe o código com seus amigos.
         </div>
+      </div>
+
+      <div class="card-panel" id="progressPanel" hidden>
+        <div class="section-title"><h2>Seu progresso</h2></div>
+        <div class="progress-head">
+          <div class="level" id="pLevel">Nível 1</div>
+          <div class="xpbar"><i id="pBar" style="width:0%"></i></div>
+          <span class="muted" id="pXp"></span>
+        </div>
+        <div class="badges" id="pBadges"></div>
       </div>
 
       <div class="card-panel" id="rankingPanel" hidden>
@@ -327,6 +359,8 @@
           <button id="raise">Aumentar</button>
         </div>
         <div class="results" id="results"></div>
+        <div class="chatbar" id="chatBar"></div>
+        <div class="chatbar" id="emoteBar"></div>
       </div>
     </section>
   </main>
@@ -345,6 +379,17 @@
     </div>
   </div>
 
+  <div class="modal" id="infoModal" role="dialog" aria-modal="true">
+    <div class="sheet">
+      <h2 id="infoTitle"></h2>
+      <div class="info-body" id="infoBody"></div>
+      <div class="actions"><button class="primary" id="infoClose">Fechar</button></div>
+    </div>
+  </div>
+  <div class="feed" id="feed"></div>
+  <footer class="footer">
+    <a data-info="regras">Regras</a><a data-info="termos">Termos</a><a data-info="privacidade">Privacidade</a><a data-info="responsavel">Jogo responsável</a><a data-info="suporte">Suporte</a>
+  </footer>
   <div class="toast" id="toast"></div>
 
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js" defer></script>
@@ -358,6 +403,23 @@
     let ws = null, state = null, config = null, firebaseAuth = null;
     let guestName = localStorage.getItem('truco.guestName') || '';
     let lastRoomCode = null;
+    const muted = new Set(JSON.parse(localStorage.getItem('truco.muted') || '[]'));
+    const CHAT_PRESETS = ['Boa partida!','Que mão!','Bora!','Ótima jogada','Tá difícil...','Truco!!','Muito bem','Vamos nessa!'];
+    const EMOTES = ['👏','😂','😎','🔥','😱','🤝'];
+    const REASONS = { ofensa: 'Ofensa', trapaca: 'Trapaça', spam: 'Spam', outro: 'Outro' };
+    const INFO = {
+      regras: ['Regras', '<p>Truco paulista com 4 jogadores em duplas (assentos opostos). Cada mão tem 3 cartas por jogador. A manilha é a carta seguinte à vira, e vale mais que as demais; a ordem de naipes entre manilhas é paus, copas, espadas e ouros. Vence a mão a dupla que ganhar duas rodadas. Truco, seis, nove e doze aumentam o valor da mão; o adversário pode aceitar, correr ou aumentar. A partida vai até 12 pontos.</p>'],
+      termos: ['Termos de uso', '<p>Documento em revisão jurídica. Ao usar o Projeto Truco você concorda em jogar com respeito, não usar trapaças ou programas automáticos e aceitar a moderação das mesas.</p>'],
+      privacidade: ['Privacidade', '<p>Documento em revisão jurídica. Guardamos seu nome, seu personagem e o histórico de partidas para o ranking e o progresso. Não vendemos dados. Denúncias são lidas por uma pessoa da equipe.</p>'],
+      responsavel: ['Jogo responsável', '<p>O Projeto Truco é um jogo de habilidade e sorte entre amigos, sem apostas com dinheiro real. Faça pausas, cuide do seu tempo e, se o jogo estiver atrapalhando sua rotina, procure apoio de pessoas de confiança.</p>'],
+      suporte: ['Suporte', '<p>Canal de suporte em definição. Documento em revisão jurídica.</p>'],
+    };
+    function openInfo(key) {
+      const [title, body] = INFO[key];
+      $('infoTitle').textContent = title;
+      $('infoBody').innerHTML = body;
+      $('infoModal').classList.add('open');
+    }
     let reconnectTimer = null;
 
     /* ---------- personagem ---------- */
@@ -532,6 +594,7 @@
         const msg = JSON.parse(ev.data);
         if (msg.type === 'welcome') {
           if (msg.avatar) { myAvatar = msg.avatar; renderMiniAvatar(); }
+          send({ type: 'me' });
           $('hello').textContent = `Olá, ${msg.name}`;
           showScreen('lobby');
           refreshRooms();
@@ -542,7 +605,15 @@
           const prev = state;
           state = msg.state;
           if (state.code) lastRoomCode = state.code;
+          $('chatBar').hidden = state.state === 'waiting';
+          $('emoteBar').hidden = state.state === 'waiting';
           render(prev);
+        } else if (msg.type === 'progress') {
+          renderProgress(msg.progress);
+        } else if (msg.type === 'message') {
+          if (!muted.has(msg.from)) showFeed(msg.kind === 'emote' ? msg.text : `${msg.name}: ${msg.text}`, msg.kind === 'emote');
+        } else if (msg.type === 'reported') {
+          toast('Denúncia enviada. Obrigado.', 'ok');
         } else if (msg.type === 'error') {
           toast(msg.message, 'err');
         }
@@ -746,7 +817,69 @@
     }
 
     /* ---------- eventos ---------- */
-    $('create').onclick = () => send({ type: 'create' });
+    $('create').onclick = () => send({ type: 'create', private: $('privateToggle').checked });
+    $('quick').onclick = () => send({ type: 'quick' });
+    document.querySelectorAll('.footer a').forEach((a) => { a.onclick = () => openInfo(a.dataset.info); });
+    $('infoClose').onclick = () => $('infoModal').classList.remove('open');
+    $('infoModal').addEventListener('click', (e) => { if (e.target.id === 'infoModal') $('infoModal').classList.remove('open'); });
+    CHAT_PRESETS.forEach((text, i) => {
+      const b = document.createElement('button');
+      b.textContent = text;
+      b.onclick = () => send({ type: 'chat', preset: i });
+      $('chatBar').appendChild(b);
+    });
+    EMOTES.forEach((emo, i) => {
+      const b = document.createElement('button');
+      b.textContent = emo;
+      b.onclick = () => send({ type: 'emote', index: i });
+      $('emoteBar').appendChild(b);
+    });
+    function showFeed(text, emote) {
+      const el = document.createElement('div');
+      if (emote) el.className = 'emo';
+      el.textContent = text;
+      $('feed').appendChild(el);
+      while ($('feed').children.length > 4) $('feed').firstChild.remove();
+      setTimeout(() => el.remove(), 4000);
+    }
+    function openSeatMenu(seat, x, y) {
+      document.querySelectorAll('.pop').forEach((n) => n.remove());
+      if (!state) return;
+      const p = seatInfo(seat);
+      if (!p || !state || p.uid === state.you.playerId || seat === state.you.seat) return;
+      const menu = document.createElement('div');
+      menu.className = 'pop';
+      menu.style.left = Math.min(x, window.innerWidth - 190) + 'px';
+      menu.style.top = Math.min(y, window.innerHeight - 200) + 'px';
+      const isMuted = muted.has(p.uid);
+      const mute = document.createElement('button');
+      mute.textContent = isMuted ? 'Desmutar mensagens' : 'Silenciar mensagens';
+      mute.onclick = () => {
+        if (isMuted) muted.delete(p.uid); else muted.add(p.uid);
+        localStorage.setItem('truco.muted', JSON.stringify([...muted]));
+        menu.remove();
+        toast(isMuted ? 'Mensagens liberadas' : 'Mensagens silenciadas', 'ok');
+      };
+      menu.appendChild(mute);
+      for (const [key, label] of Object.entries(REASONS)) {
+        const b = document.createElement('button');
+        b.textContent = 'Denunciar: ' + label;
+        b.onclick = () => { send({ type: 'report', targetUid: p.uid, reason: key }); menu.remove(); };
+        menu.appendChild(b);
+      }
+      document.body.appendChild(menu);
+    }
+    document.addEventListener('click', (e) => { if (!e.target.closest('.pop') && !e.target.closest('.seat')) document.querySelectorAll('.pop').forEach((n) => n.remove()); });
+    ['seat0','seat1','seat2','seat3'].forEach((id, seat) => {
+      $(id).addEventListener('click', (e) => openSeatMenu(seat, e.clientX, e.clientY));
+    });
+    function renderProgress(view) {
+      $('progressPanel').hidden = false;
+      $('pLevel').textContent = 'Nível ' + view.level;
+      $('pBar').style.width = Math.round((view.xpIntoLevel / 100) * 100) + '%';
+      $('pXp').textContent = `${view.xpIntoLevel}/100 XP · ${view.wins} vitórias em ${view.games} partidas`;
+      $('pBadges').innerHTML = view.achievements.map((a) => `<span class="badge ${a.unlocked ? 'on' : ''}">${a.unlocked ? '★ ' : ''}${escapeHtml(a.title)}</span>`).join('');
+    }
     $('join').onclick = () => send({ type: 'join', code: $('code').value.trim().toUpperCase() });
     $('code').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('join').click(); });
     $('refresh').onclick = refreshRooms;
@@ -803,6 +936,7 @@
 
     renderMiniAvatar();
     loadRanking();
+    try { if (!localStorage.getItem('truco.tutorialSeen')) { openInfo('regras'); localStorage.setItem('truco.tutorialSeen', '1'); } } catch (_) {}
     loadConfig().catch(() => { showScreen('login'); $('loginStatus').textContent = 'Erro ao carregar a configuração do servidor.'; });
     setInterval(() => { if (!$('lobby').hidden) refreshRooms(); }, 5000);
   </script>

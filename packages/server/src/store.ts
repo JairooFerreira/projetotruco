@@ -1,6 +1,15 @@
 import type { Pool } from 'pg';
 import type { Team, Seat } from '@projeto-truco/game-engine';
 import { DEFAULT_AVATAR, parseAvatar, type Avatar } from './avatar.js';
+import type { Progress } from './progress.js';
+
+export interface ReportRecord {
+  readonly reporterUid: string;
+  readonly targetUid: string;
+  readonly reason: string;
+  readonly roomCode: string;
+  readonly createdAt: string;
+}
 
 export interface RankingEntry {
   readonly uid: string;
@@ -24,6 +33,10 @@ export interface MatchStore {
   ranking(limit: number): Promise<RankingEntry[]>;
   getAvatar(uid: string): Promise<Avatar>;
   saveAvatar(uid: string, avatar: Avatar): Promise<void>;
+  recordResult(uid: string, won: boolean, xp: number): Promise<void>;
+  getProgress(uid: string): Promise<Progress>;
+  addReport(report: Omit<ReportRecord, 'createdAt'>): Promise<void>;
+  listReports(limit: number): Promise<ReportRecord[]>;
 }
 
 /** Implementação em memória, usada em testes e quando o banco não está configurado. */
@@ -54,6 +67,25 @@ export class MemoryMatchStore implements MatchStore {
   }
 
   readonly avatars = new Map<string, Avatar>();
+  readonly progress = new Map<string, Progress>();
+  readonly reports: ReportRecord[] = [];
+
+  async recordResult(uid: string, won: boolean, xp: number): Promise<void> {
+    const p = this.progress.get(uid) ?? { xp: 0, games: 0, wins: 0 };
+    this.progress.set(uid, { xp: p.xp + xp, games: p.games + 1, wins: p.wins + (won ? 1 : 0) });
+  }
+
+  async getProgress(uid: string): Promise<Progress> {
+    return this.progress.get(uid) ?? { xp: 0, games: 0, wins: 0 };
+  }
+
+  async addReport(report: Omit<ReportRecord, 'createdAt'>): Promise<void> {
+    this.reports.push({ ...report, createdAt: new Date().toISOString() });
+  }
+
+  async listReports(limit: number): Promise<ReportRecord[]> {
+    return this.reports.slice(-limit).reverse();
+  }
 
   async getAvatar(uid: string): Promise<Avatar> {
     return this.avatars.get(uid) ?? { ...DEFAULT_AVATAR };
@@ -127,6 +159,34 @@ export class PgMatchStore implements MatchStore {
        WHERE id = $1 AND finished_at IS NULL`,
       [matchId, winner, score[0], score[1]],
     );
+  }
+
+  async recordResult(uid: string, won: boolean, xp: number): Promise<void> {
+    await this.pool.query(
+      `INSERT INTO user_progress (uid, xp, games, wins) VALUES ($1, $2, 1, $3)
+       ON CONFLICT (uid) DO UPDATE SET xp = user_progress.xp + EXCLUDED.xp,
+         games = user_progress.games + 1, wins = user_progress.wins + EXCLUDED.wins`,
+      [uid, xp, won ? 1 : 0],
+    );
+  }
+
+  async getProgress(uid: string): Promise<Progress> {
+    const { rows } = await this.pool.query<{ xp: number; games: number; wins: number }>(
+      'SELECT xp, games, wins FROM user_progress WHERE uid = $1', [uid]);
+    const r = rows[0];
+    return r ? { xp: r.xp, games: r.games, wins: r.wins } : { xp: 0, games: 0, wins: 0 };
+  }
+
+  async addReport(report: Omit<ReportRecord, 'createdAt'>): Promise<void> {
+    await this.pool.query(
+      'INSERT INTO reports (reporter_uid, target_uid, reason, room_code) VALUES ($1, $2, $3, $4)',
+      [report.reporterUid, report.targetUid, report.reason, report.roomCode]);
+  }
+
+  async listReports(limit: number): Promise<ReportRecord[]> {
+    const { rows } = await this.pool.query<{ reporter_uid: string; target_uid: string; reason: string; room_code: string; created_at: Date }>(
+      'SELECT reporter_uid, target_uid, reason, room_code, created_at FROM reports ORDER BY id DESC LIMIT $1', [limit]);
+    return rows.map((r) => ({ reporterUid: r.reporter_uid, targetUid: r.target_uid, reason: r.reason, roomCode: r.room_code, createdAt: r.created_at.toISOString() }));
   }
 
   async getAvatar(uid: string): Promise<Avatar> {

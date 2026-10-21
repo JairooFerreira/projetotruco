@@ -69,5 +69,6 @@ async function buildDependencies(): Promise<{ verifier: TokenVerifier; store: Ma
 const deps = await buildDependencies();
 const port = Number(process.env['PORT'] ?? 8080);
 const host = process.env['HOST'] ?? '127.0.0.1';
-const server = await startGameServer({ port, host, ...deps });
+const adminUids = (process.env['ADMIN_UIDS'] ?? '').split(',').map((u) => u.trim()).filter(Boolean);
+const server = await startGameServer({ port, host, adminUids, ...deps });
 console.log(`Servidor de mesas em http://${host}:${server.port} (auth: ${deps.publicConfig.authMode})`);

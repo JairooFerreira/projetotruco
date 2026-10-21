@@ -37,7 +37,7 @@ export interface RoomSnapshot {
   readonly code: string;
   readonly state: RoomState;
   readonly you: { readonly playerId: string; readonly seat: Seat };
-  readonly players: ReadonlyArray<{ seat: Seat; name: string; connected: boolean; avatar: Avatar }>;
+  readonly players: ReadonlyArray<{ uid: string; seat: Seat; name: string; connected: boolean; avatar: Avatar }>;
   readonly dealer: Seat;
   readonly score: Score;
   readonly matchWinner: Team | null;
@@ -55,7 +55,7 @@ export interface RoomOptions {
 export interface RoomListener {
   matchStarted(matchId: string, roomCode: string, players: ReadonlyArray<RoomPlayer>): Promise<void>;
   handFinished(matchId: string, index: number, result: HandResult): Promise<void>;
-  matchFinished(matchId: string, winner: Team, score: Score): Promise<void>;
+  matchFinished(matchId: string, winner: Team, score: Score, players: ReadonlyArray<RoomPlayer>): Promise<void>;
 }
 
 /**
@@ -64,6 +64,7 @@ export interface RoomListener {
  */
 export class Room {
   readonly code: string;
+  readonly isPrivate: boolean;
   private readonly random: (() => number) | undefined;
   private players: RoomPlayer[] = [];
   private state: RoomState = 'waiting';
@@ -75,8 +76,9 @@ export class Room {
   private readonly listener: RoomListener | undefined;
   private matchId: string | null = null;
 
-  constructor(options: RoomOptions) {
+  constructor(options: RoomOptions & { readonly isPrivate?: boolean }) {
     this.code = options.code;
+    this.isPrivate = options.isPrivate ?? false;
     this.random = options.random;
     this.listener = options.listener;
   }
@@ -90,12 +92,13 @@ export class Room {
   }
 
   /** Resumo público para o lobby: nunca expõe identificadores internos. */
-  summary(): { code: string; state: RoomState; seated: number; names: string[] } {
+  summary(): { code: string; state: RoomState; seated: number; names: string[]; players: Array<{ uid: string; name: string }> } {
     return {
       code: this.code,
       state: this.state,
       seated: this.players.length,
       names: this.players.map((p) => p.name),
+      players: this.players.map((p) => ({ uid: p.playerId, name: p.name })),
     };
   }
 
@@ -170,7 +173,7 @@ export class Room {
       code: this.code,
       state: this.state,
       you: { playerId, seat: me.seat },
-      players: this.players.map((p) => ({ seat: p.seat, name: p.name, connected: p.connected, avatar: p.avatar })),
+      players: this.players.map((p) => ({ uid: p.playerId, seat: p.seat, name: p.name, connected: p.connected, avatar: p.avatar })),
       dealer: this.dealer,
       score: this.score,
       matchWinner: this.winner,
@@ -204,7 +207,8 @@ export class Room {
       this.state = 'finished';
       this.hand = null;
       const finalScore = this.score;
-      this.emit((l) => l.matchFinished(matchId, champion, finalScore));
+      const finalPlayers = [...this.players];
+      this.emit((l) => l.matchFinished(matchId, champion, finalScore, finalPlayers));
       return;
     }
     this.dealer = nextSeat(this.dealer);
@@ -246,12 +250,12 @@ export class RoomRegistry {
     this.listener = options.listener;
   }
 
-  create(): Room {
+  create(options: { isPrivate?: boolean } = {}): Room {
     let code = this.codeFor();
     while (this.rooms.has(code)) {
       code = this.codeFor();
     }
-    const room = new Room({ code, random: this.random, listener: this.listener });
+    const room = new Room({ code, random: this.random, listener: this.listener, isPrivate: options.isPrivate ?? false });
     this.rooms.set(code, room);
     return room;
   }
@@ -263,9 +267,18 @@ export class RoomRegistry {
   /** Mesas que ainda aceitam jogadores. */
   openRooms(): Array<{ code: string; state: RoomState; seated: number; names: string[] }> {
     return [...this.rooms.values()]
+      .filter((r) => !r.isPrivate)
       .map((r) => r.summary())
       .filter((r) => r.state === 'waiting')
-      .sort((a, b) => b.seated - a.seated);
+      .sort((a, b) => b.seated - a.seated)
+      .map(({ players: _players, ...rest }) => rest);
+  }
+
+  /** Mesa pública aberta para entrada rápida (matchmaking simples). */
+  findQuickRoom(): Room | undefined {
+    return [...this.rooms.values()]
+      .filter((r) => !r.isPrivate && r.currentState === 'waiting')
+      .sort((a, b) => b.playerIds().length - a.playerIds().length)[0];
   }
 }
 
