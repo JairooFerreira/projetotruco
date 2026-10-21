@@ -74,6 +74,11 @@ export function startGameServer(options: GameServerOptions): Promise<GameServer>
         });
       return;
     }
+    if (req.method === 'GET' && req.url === '/rooms') {
+      res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
+      res.end(JSON.stringify({ rooms: registry.openRooms() }));
+      return;
+    }
     if (req.method === 'GET' && req.url === '/config') {
       res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
       res.end(config);

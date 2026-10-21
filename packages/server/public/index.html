@@ -2,115 +2,342 @@
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Projeto Truco</title>
   <style>
-    :root { color-scheme: dark; --bg:#0d1117; --panel:#161b22; --ink:#e6edf3; --muted:#8b949e; --gold:#f2c14e; --green:#2ea043; --red:#da3633; }
+    :root {
+      --bg-1: #0b1020;
+      --bg-2: #101a33;
+      --ink: #eef2ff;
+      --muted: #9aa6c7;
+      --panel: rgba(255, 255, 255, 0.05);
+      --line: rgba(255, 255, 255, 0.10);
+      --gold: #f5c451;
+      --gold-2: #ffb020;
+      --green: #1f8a4c;
+      --felt-1: #1b6b43;
+      --felt-2: #0f4a2e;
+      --red: #e5484d;
+      --card-bg: #fffdf7;
+      --card-ink: #161616;
+      --card-red: #c62828;
+    }
+    color-scheme: dark;
     * { box-sizing: border-box; }
-    body { margin:0; font-family: system-ui, sans-serif; background: radial-gradient(circle at 50% 0%, #1b3a2a, var(--bg) 60%); color: var(--ink); min-height: 100vh; }
-    header { padding: 12px 16px; display:flex; justify-content:space-between; align-items:center; }
-    h1 { font-size: 18px; margin: 0; letter-spacing: .5px; }
-    main { max-width: 900px; margin: 0 auto; padding: 8px 16px 32px; }
-    .panel { background: var(--panel); border: 1px solid #30363d; border-radius: 12px; padding: 16px; margin-bottom: 12px; }
-    input { background:#0d1117; color:var(--ink); border:1px solid #30363d; border-radius:8px; padding:10px 12px; font-size:16px; }
-    button { background:#21262d; color:var(--ink); border:1px solid #30363d; border-radius:8px; padding:10px 14px; font-size:15px; cursor:pointer; }
-    button:hover:not(:disabled) { border-color: var(--gold); }
-    button:disabled { opacity:.45; cursor:not-allowed; }
-    button.primary { background: var(--green); border-color: var(--green); color:#fff; }
-    button.danger { background: var(--red); border-color: var(--red); color:#fff; }
-    button.truco { background: var(--gold); color:#111; border-color: var(--gold); font-weight:700; }
-    .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
-    .cards { display:flex; gap:10px; flex-wrap:wrap; justify-content:center; margin: 8px 0; }
-    .card { width:72px; height:104px; border-radius:10px; background:#fff; color:#111; display:flex; flex-direction:column; justify-content:space-between; padding:6px; box-shadow: 0 6px 16px rgba(0,0,0,.4); font-weight:700; }
-    .card.mine { cursor:pointer; transition: transform .15s; }
-    .card.mine:hover:not(:disabled) { transform: translateY(-6px); }
-    .card.red { color:#b42318; }
-    .card .suit { font-size: 12px; font-weight:500; }
-    .card .rank { font-size: 26px; }
-    .table { min-height: 130px; display:flex; gap:12px; justify-content:center; align-items:center; flex-wrap:wrap; border:1px dashed #30363d; border-radius:14px; padding:12px; }
+    html { background: var(--bg-1); }
+    html, body { margin: 0; min-height: 100%; }
+    body {
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(1200px 600px at 50% -10%, #1d2f5c 0%, transparent 60%),
+        radial-gradient(900px 500px at 100% 100%, #0f3b2b 0%, transparent 60%),
+        linear-gradient(180deg, var(--bg-2), var(--bg-1));
+      background-attachment: fixed;
+      -webkit-font-smoothing: antialiased;
+    }
+    header {
+      position: sticky; top: 0; z-index: 10;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 18px; backdrop-filter: blur(10px);
+      background: rgba(11, 16, 32, 0.6); border-bottom: 1px solid var(--line);
+    }
+    .brand { display: flex; align-items: center; gap: 10px; font-weight: 800; letter-spacing: .3px; }
+    .logo {
+      width: 32px; height: 32px; border-radius: 9px;
+      background: linear-gradient(135deg, var(--gold), var(--gold-2));
+      display: grid; place-items: center; color: #1a1300; font-weight: 900; box-shadow: 0 6px 18px rgba(245, 196, 81, .35);
+    }
+    .status { font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 8px; }
+    .dot { width: 9px; height: 9px; border-radius: 50%; background: #566080; }
+    .dot.on { background: #3ddc84; box-shadow: 0 0 10px #3ddc84; }
+    main { max-width: 980px; margin: 0 auto; padding: 18px 16px 40px; }
+    .hero {
+      text-align: center; padding: 28px 12px 10px;
+    }
+    .hero h1 { margin: 0 0 6px; font-size: clamp(26px, 5vw, 40px); letter-spacing: -.5px; }
+    .hero p { margin: 0; color: var(--muted); }
+    .card-panel {
+      background: var(--panel); border: 1px solid var(--line); border-radius: 18px;
+      padding: 18px; margin-top: 16px; box-shadow: 0 20px 50px rgba(0,0,0,.25);
+    }
+    .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+    .grow { flex: 1; min-width: 180px; }
+    input {
+      width: 100%; background: rgba(0,0,0,.25); color: var(--ink);
+      border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; font-size: 16px; outline: none;
+    }
+    input:focus { border-color: var(--gold); box-shadow: 0 0 0 3px rgba(245,196,81,.2); }
+    button {
+      font: inherit; cursor: pointer; color: var(--ink);
+      background: rgba(255,255,255,.07); border: 1px solid var(--line);
+      border-radius: 12px; padding: 11px 16px; transition: transform .12s ease, background .2s, border-color .2s;
+    }
+    button:hover:not(:disabled) { transform: translateY(-1px); border-color: var(--gold); }
+    button:active:not(:disabled) { transform: translateY(1px) scale(.99); }
+    button:disabled { opacity: .4; cursor: not-allowed; }
+    button.primary { background: linear-gradient(135deg, var(--gold), var(--gold-2)); color: #1a1300; border: none; font-weight: 800; }
+    button.ok { background: linear-gradient(135deg, #2fbf71, var(--green)); border: none; color: #fff; font-weight: 700; }
+    button.danger { background: linear-gradient(135deg, #ff6b6b, var(--red)); border: none; color: #fff; font-weight: 700; }
+    button.truco { background: linear-gradient(135deg, #ff9f1c, #ff6b35); border: none; color: #fff; font-weight: 800; letter-spacing: .4px; }
+    .section-title { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+    .section-title h2 { font-size: 18px; margin: 0; }
     .muted { color: var(--muted); font-size: 14px; }
-    .score { font-size: 28px; font-weight: 700; }
-    .turn { color: var(--gold); font-weight: 700; }
-    .error { color: #ff7b72; min-height: 20px; }
+    .rooms { display: grid; gap: 10px; }
+    .room {
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      padding: 14px; border-radius: 14px; background: rgba(0,0,0,.2); border: 1px solid var(--line);
+      animation: rise .35s ease both;
+    }
+    .room .code { font-family: ui-monospace, Menlo, Consolas, monospace; font-weight: 800; letter-spacing: 2px; font-size: 18px; }
+    .avatars { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+    .avatar {
+      font-size: 12px; padding: 4px 9px; border-radius: 999px; background: rgba(255,255,255,.08); color: var(--muted);
+    }
+    .empty { text-align: center; padding: 26px 10px; color: var(--muted); border: 1px dashed var(--line); border-radius: 14px; }
+    .empty b { color: var(--ink); display: block; margin-bottom: 4px; }
+
+    /* MESA */
+    .table-wrap {
+      position: relative; margin: 14px auto 0; width: 100%; max-width: 760px; aspect-ratio: 16 / 11;
+      border-radius: 280px; /* oval */
+      background:
+        radial-gradient(ellipse at 50% 40%, rgba(255,255,255,.10), transparent 60%),
+        radial-gradient(ellipse at 50% 50%, var(--felt-1), var(--felt-2) 70%);
+      box-shadow: inset 0 0 60px rgba(0,0,0,.45), inset 0 0 0 10px #5b3b1e, inset 0 0 0 14px #2c1b0d, 0 30px 60px rgba(0,0,0,.45);
+      overflow: hidden;
+    }
+    .seat {
+      position: absolute; width: 150px; text-align: center; transform: translate(-50%, -50%);
+      transition: filter .3s ease;
+    }
+    .seat .who {
+      display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 999px;
+      background: rgba(0,0,0,.35); font-size: 13px; border: 1px solid rgba(255,255,255,.12);
+    }
+    .seat .who.turn { border-color: var(--gold); box-shadow: 0 0 0 3px rgba(245,196,81,.25); }
+    .seat.off { opacity: .45; }
+    .seat .pile { margin-top: 4px; font-size: 11px; color: rgba(255,255,255,.7); }
+    .seat-0 { left: 50%; top: 90%; }
+    .seat-2 { left: 50%; top: 10%; }
+    .seat-1 { left: 10%; top: 50%; }
+    .seat-3 { left: 90%; top: 50%; }
+    .team-tag {
+      position: absolute; left: 50%; top: 6%; transform: translateX(-50%);
+      font-size: 12px; color: rgba(255,255,255,.6); letter-spacing: 2px; text-transform: uppercase;
+    }
+    .center {
+      position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+      width: 52%; min-height: 36%; display: grid; place-items: center; gap: 10px;
+    }
+    .trick { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; align-items: center; min-height: 110px; }
+    .vira { font-size: 12px; color: rgba(255,255,255,.75); display: flex; align-items: center; gap: 8px; }
+    .scorebar {
+      font-weight: 800; font-size: 14px; color: #fff; background: rgba(0,0,0,.35); padding: 6px 12px; border-radius: 999px;
+      white-space: nowrap;
+    }
+    .stake {
+      position: absolute; right: 6%; top: 8%; background: var(--gold); color: #1a1300;
+      font-weight: 900; border-radius: 10px; padding: 4px 10px; font-size: 13px; box-shadow: 0 6px 16px rgba(245,196,81,.4);
+    }
+
+    /* CARTAS */
+    .card {
+      position: relative; width: 74px; height: 106px; border-radius: 11px; background: var(--card-bg); color: var(--card-ink);
+      box-shadow: 0 10px 22px rgba(0,0,0,.35), inset 0 0 0 1px rgba(0,0,0,.08);
+      display: flex; flex-direction: column; justify-content: space-between; padding: 7px 8px;
+      font-weight: 800; user-select: none; flex: none;
+      animation: deal .42s cubic-bezier(.2,.9,.3,1.2) both;
+    }
+    .card.red { color: var(--card-red); }
+    .card .r { font-size: 24px; line-height: 1; }
+    .card .s { font-size: 20px; line-height: 1; align-self: flex-end; }
+    .card.back {
+      background: repeating-linear-gradient(45deg, #1c3a7a 0 8px, #22458f 8px 16px);
+      border: 3px solid #f5c451; animation: none;
+    }
+    .card.mine { cursor: pointer; }
+    .card.mine:hover { transform: translateY(-10px) rotate(-1deg); box-shadow: 0 18px 30px rgba(0,0,0,.45), 0 0 0 2px var(--gold); }
+    .card.mine.disabled { cursor: default; }
+    .card.manilha::after {
+      content: "M"; position: absolute; top: -8px; right: -6px; background: var(--gold); color: #1a1300;
+      font-size: 11px; border-radius: 999px; width: 20px; height: 20px; display: grid; place-items: center; font-weight: 900;
+    }
+    .card.played { animation: play .45s ease both; }
+    .hand-wrap { margin-top: 18px; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+    .hand { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; min-height: 116px; }
+    .controls { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+    .info { text-align: center; font-weight: 700; min-height: 22px; }
+    .info.turn { color: var(--gold); }
+    .results { display: flex; gap: 6px; justify-content: center; }
+    .res { width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center; font-weight: 900; font-size: 13px; }
+    .res.win { background: var(--green); color: #fff; }
+    .res.lose { background: #7a2b2e; color: #fff; }
+
+    .toast {
+      position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%) translateY(20px); opacity: 0;
+      background: #1c2440; border: 1px solid var(--line); padding: 12px 16px; border-radius: 12px; font-size: 14px;
+      transition: opacity .25s ease, transform .25s ease; z-index: 50; max-width: calc(100% - 32px); text-align: center;
+      box-shadow: 0 12px 30px rgba(0,0,0,.4);
+    }
+    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+    .toast.err { border-color: var(--red); color: #ffb3b3; }
+    .toast.ok { border-color: #3ddc84; }
+    .bump { animation: bump .5s ease; }
+
+    @keyframes deal { from { transform: translateY(-30px) scale(.9); opacity: 0; } to { transform: none; opacity: 1; } }
+    @keyframes play { from { transform: translateY(40px) scale(.8); opacity: 0; } to { transform: none; opacity: 1; } }
+    @keyframes rise { from { transform: translateY(8px); opacity: 0; } to { transform: none; opacity: 1; } }
+    @keyframes bump { 0% { transform: scale(1); } 40% { transform: scale(1.08); } 100% { transform: scale(1); } }
+
+    /* MOBILE */
+    @media (max-width: 640px) {
+      .table-wrap { aspect-ratio: auto; height: 460px; border-radius: 40px; }
+      .seat { width: 110px; }
+      .seat .who { font-size: 12px; padding: 5px 8px; }
+      .seat-0 { top: 91%; } .seat-2 { top: 8%; }
+      .seat-1 { left: 13%; top: 48%; } .seat-3 { left: 87%; top: 48%; }
+      .center { width: 60%; min-height: 40%; }
+      .card { width: 62px; height: 90px; }
+      .card .r { font-size: 20px; }
+      .card .s { font-size: 17px; }
+      .trick { min-height: 96px; }
+      .stake { top: 4%; right: 4%; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation: none !important; transition: none !important; }
+    }
   </style>
 </head>
 <body>
   <header>
-    <h1>Projeto Truco</h1>
-    <span class="muted" id="conn">desconectado</span>
+    <div class="brand"><div class="logo">T</div><span>Projeto Truco</span></div>
+    <div class="status"><span class="dot" id="dot"></span><span id="conn">desconectado</span></div>
   </header>
+
   <main>
-    <section class="panel" id="login" hidden>
-      <div id="googleLogin" class="row" hidden>
-        <button class="primary" id="googleBtn">Entrar com Google</button>
+    <!-- LOGIN -->
+    <section id="login" hidden>
+      <div class="hero">
+        <h1>Truco entre amigos</h1>
+        <p>Mesas de quatro jogadores, 2 contra 2, em tempo real.</p>
       </div>
-      <div id="guestLogin" class="row" hidden>
-        <input id="guestName" maxlength="20" placeholder="Seu nome" autocomplete="nickname" />
-        <button id="guestBtn">Entrar como convidado</button>
-        <span class="muted">Modo de teste: sem login real.</span>
+      <div class="card-panel" id="googleLogin" hidden>
+        <div class="row" style="justify-content:center">
+          <button class="primary" id="googleBtn">Entrar com Google</button>
+        </div>
       </div>
-      <p class="muted" id="loginStatus">Carregando…</p>
+      <div class="card-panel" id="guestLogin" hidden>
+        <div class="row">
+          <input class="grow" id="guestName" maxlength="20" placeholder="Seu nome na mesa" autocomplete="nickname" />
+          <button class="primary" id="guestBtn">Entrar</button>
+        </div>
+        <p class="muted" style="margin:10px 0 0">Modo de teste: entrada sem senha, só para experimentar.</p>
+      </div>
+      <p class="muted" id="loginStatus" style="text-align:center"></p>
     </section>
 
-    <section class="panel" id="lobby" hidden>
-      <div class="row">
-        <span id="who" class="muted"></span>
-        <button id="signout">Sair</button>
+    <!-- LOBBY -->
+    <section id="lobby" hidden>
+      <div class="hero">
+        <h1 id="hello">Bem-vindo</h1>
+        <p>Crie uma mesa e chame os amigos, ou entre em uma que está aberta.</p>
       </div>
-      <div class="row" style="margin-top:10px">
-        <button class="primary" id="create">Criar mesa</button>
+
+      <div class="card-panel">
+        <div class="row">
+          <button class="primary grow" id="create">+ Criar mesa</button>
+          <input class="grow" id="code" maxlength="5" placeholder="Código da mesa" style="text-transform:uppercase" />
+          <button id="join">Entrar com código</button>
+        </div>
       </div>
-      <div class="row" style="margin-top:10px">
-        <input id="code" maxlength="5" placeholder="Código da mesa" style="text-transform:uppercase" />
-        <button id="join">Entrar</button>
+
+      <div class="card-panel">
+        <div class="section-title">
+          <h2>Mesas abertas</h2>
+          <button id="refresh" style="padding:7px 12px">Atualizar</button>
+        </div>
+        <div class="rooms" id="rooms"></div>
+        <div class="empty" id="roomsEmpty" hidden>
+          <b>Nenhuma mesa aberta agora</b>
+          Crie uma e compartilhe o código com seus amigos.
+        </div>
       </div>
-      <p class="muted">Mesas de quatro jogadores: 2 contra 2. A partida começa quando a mesa estiver cheia.</p>
+
+      <div class="card-panel" id="rankingPanel" hidden>
+        <div class="section-title"><h2>Ranking</h2></div>
+        <ol id="rankingList" class="muted" style="margin:0; padding-left:20px"></ol>
+        <p class="muted" id="rankingEmpty"></p>
+      </div>
     </section>
 
-    <section class="panel" id="ranking" hidden>
-      <h3 style="margin:0 0 8px">Ranking</h3>
-      <ol id="rankingList" class="muted" style="margin:0; padding-left:20px"></ol>
-      <p class="muted" id="rankingEmpty"></p>
-    </section>
+    <!-- MESA -->
+    <section id="game">
+      <div class="row" style="justify-content:space-between; margin-top:6px">
+        <button id="leave" style="padding:8px 12px">← Lobby</button>
+        <div class="muted">Mesa <b id="roomCode" style="color:var(--ink); letter-spacing:2px"></b> · <span id="copyCode" style="cursor:pointer; text-decoration:underline">copiar código</span></div>
+      </div>
 
-    <section class="panel" id="game" hidden>
-      <div class="row" style="justify-content:space-between">
-        <span>Mesa <strong id="roomCode"></strong></span>
-        <span class="score" id="score"></span>
+      <div class="table-wrap" id="table">
+        <div class="seat seat-2" id="seat2"></div>
+        <div class="seat seat-1" id="seat1"></div>
+        <div class="seat seat-3" id="seat3"></div>
+        <div class="seat seat-0" id="seat0"></div>
+        <div class="center">
+          <div class="vira" id="vira"></div>
+          <div class="trick" id="trick"></div>
+          <div class="scorebar" id="score"></div>
+        </div>
+        <div class="stake" id="stake" hidden></div>
       </div>
-      <p class="muted" id="seats"></p>
-      <p class="turn" id="turnInfo"></p>
-      <div class="table" id="table"></div>
-      <p id="vira" class="muted"></p>
-      <h3 style="margin:12px 0 4px">Sua mão</h3>
-      <div class="cards" id="hand"></div>
-      <div class="row" style="justify-content:center; margin-top:8px">
-        <button class="truco" id="truco">Truco</button>
-        <button id="accept">Aceitar</button>
-        <button class="danger" id="run">Correr</button>
-        <button id="raise">Aumentar</button>
+
+      <div class="hand-wrap">
+        <div class="info" id="turnInfo"></div>
+        <div class="hand" id="hand"></div>
+        <div class="controls">
+          <button class="truco" id="truco">TRUCO</button>
+          <button class="ok" id="accept">Aceitar</button>
+          <button class="danger" id="run">Correr</button>
+          <button id="raise">Aumentar</button>
+        </div>
+        <div class="results" id="results"></div>
       </div>
-      <p class="muted" id="stakeInfo"></p>
-      <p class="muted" id="results"></p>
     </section>
-    <p class="error" id="error"></p>
   </main>
+
+  <div class="toast" id="toast"></div>
 
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js" defer></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js" defer></script>
   <script>
-    const SUIT_LABEL = { paus: 'paus', copas: 'copas', espadas: 'espadas', ouros: 'ouros' };
     const SUIT_SYMBOL = { paus: '♣', copas: '♥', espadas: '♠', ouros: '♦' };
     const RED = new Set(['copas', 'ouros']);
+    const ORDER = ['4','5','6','7','Q','J','K','A','2','3'];
     const $ = (id) => document.getElementById(id);
 
-    let ws = null;
-    let state = null;
-    let config = null;
-    let firebaseAuth = null;
+    let ws = null, state = null, config = null, firebaseAuth = null;
     let guestName = localStorage.getItem('truco.guestName') || '';
-    let joined = false;
+    let lastRoomCode = null;
+    let reconnectTimer = null;
 
+    /* ---------- utilitários ---------- */
+    function toast(msg, kind) {
+      const t = $('toast');
+      t.textContent = msg;
+      t.className = 'toast show ' + (kind || '');
+      clearTimeout(toast._t);
+      toast._t = setTimeout(() => { t.className = 'toast'; }, 3200);
+    }
+    function nextRankLabel(rank) { return ORDER[(ORDER.indexOf(rank) + 1) % ORDER.length]; }
+    function isManilha(card, viraRank) { return card.rank === nextRankLabel(viraRank); }
+    function show(id, on) { $(id).hidden = !on; }
+    function showScreen(name) {
+      show('login', name === 'login');
+      show('lobby', name === 'lobby');
+      show('game', name === 'game');
+    }
+
+    /* ---------- conexão ---------- */
     async function getIdToken() {
       if (!config) throw new Error('Configuração não carregada');
       if (config.authMode === 'guest') return 'guest:' + (guestName || 'Convidado');
@@ -118,72 +345,89 @@
       if (!user) throw new Error('Entre com sua conta Google');
       return user.getIdToken();
     }
-
-    function showLoginFor(mode) {
-      $('login').hidden = false;
-      $('googleLogin').hidden = mode !== 'firebase';
-      $('guestLogin').hidden = mode !== 'guest';
-      $('loginStatus').textContent = mode === 'guest'
-        ? 'MODO DE TESTE: qualquer nome pode ser usado. Não é autenticação.'
-        : 'Entre com sua conta Google para jogar.';
-      $('lobby').hidden = true;
-      $('game').hidden = true;
+    function send(payload) { if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(payload)); }
+    function setConn(online) {
+      $('conn').textContent = online ? 'conectado' : 'desconectado';
+      $('dot').classList.toggle('on', online);
     }
-
-    async function loadConfig() {
-      const res = await fetch('/config', { cache: 'no-store' });
-      config = await res.json();
-      if (config.authMode === 'firebase' && window.firebase) {
-        firebase.initializeApp({
-          apiKey: config.firebase.apiKey,
-          authDomain: config.firebase.authDomain,
-          projectId: config.firebase.projectId,
-        });
-        firebaseAuth = firebase.auth();
-        firebaseAuth.onAuthStateChanged((user) => {
-          if (user) openSocket(); else { closeSocket(); showLoginFor('firebase'); }
-        });
-      } else if (config.authMode === 'firebase') {
-        $('loginStatus').textContent = 'Não foi possível carregar o login do Google. Verifique sua conexão.';
-        $('login').hidden = false;
-      } else {
-        showLoginFor('guest');
-        $('guestName').value = guestName;
-      }
-    }
-
     function openSocket() {
       closeSocket();
       const proto = location.protocol === 'https:' ? 'wss' : 'ws';
       ws = new WebSocket(`${proto}://${location.host}`);
       ws.onopen = async () => {
-        $('conn').textContent = 'conectado';
-        try {
-          send({ type: 'auth', idToken: await getIdToken() });
-        } catch (err) { showError(err.message); }
+        setConn(true);
+        try { send({ type: 'auth', idToken: await getIdToken() }); }
+        catch (err) { toast(err.message, 'err'); }
       };
       ws.onclose = (ev) => {
-        $('conn').textContent = 'desconectado';
+        setConn(false);
         if (ev.code !== 4000 && config && (config.authMode === 'guest' || (firebaseAuth && firebaseAuth.currentUser))) {
-          setTimeout(openSocket, 1500);
+          clearTimeout(reconnectTimer);
+          reconnectTimer = setTimeout(openSocket, 1500);
         }
       };
       ws.onmessage = (ev) => {
         const msg = JSON.parse(ev.data);
         if (msg.type === 'welcome') {
-          $('who').textContent = `Você: ${msg.name}`;
-          $('lobby').hidden = false;
-          $('login').hidden = true;
-          $('guestLogin').hidden = true;
-          $('googleLogin').hidden = true;
+          $('hello').textContent = `Olá, ${msg.name}`;
+          showScreen('lobby');
+          refreshRooms();
+          if (lastRoomCode) send({ type: 'join', code: lastRoomCode });
         } else if (msg.type === 'state') {
+          const prev = state;
           state = msg.state;
-          render();
+          if (state.code) lastRoomCode = state.code;
+          render(prev);
         } else if (msg.type === 'error') {
-          showError(msg.message);
+          toast(msg.message, 'err');
         }
       };
     }
+    function closeSocket() { if (ws) { const o = ws; ws = null; o.close(4000); } }
+
+    /* ---------- cartas ---------- */
+    function cardEl(card, opts) {
+      const el = document.createElement('div');
+      el.className = 'card' + (RED.has(card.suit) ? ' red' : '') + (opts && opts.clickable ? ' mine' : '') + (opts && opts.played ? ' played' : '');
+      if (opts && opts.manilha) el.classList.add('manilha');
+      el.innerHTML = `<span class="r">${card.rank}</span><span class="s">${SUIT_SYMBOL[card.suit]}</span>`;
+      if (opts && opts.clickable) el.onclick = () => send({ type: 'play', card });
+      return el;
+    }
+    function backEl() {
+      const el = document.createElement('div');
+      el.className = 'card back';
+      return el;
+    }
+
+    /* ---------- lobby ---------- */
+    async function refreshRooms() {
+      try {
+        const res = await fetch('/rooms', { cache: 'no-store' });
+        const { rooms } = await res.json();
+        const list = $('rooms');
+        list.innerHTML = '';
+        for (const r of rooms) {
+          const row = document.createElement('div');
+          row.className = 'room';
+          const names = r.names.map((n) => `<span class="avatar">${escapeHtml(n)}</span>`).join('');
+          row.innerHTML = `
+            <div>
+              <div class="code">${r.code}</div>
+              <div class="avatars">${names || '<span class="muted">vazia</span>'}</div>
+            </div>
+            <div style="text-align:right">
+              <div class="muted" style="font-size:13px">${r.seated}/4 jogadores</div>
+              <button class="ok" style="margin-top:6px">Entrar</button>
+            </div>`;
+          row.querySelector('button').onclick = () => { currentJoin(r.code); };
+          list.appendChild(row);
+        }
+        show('roomsEmpty', rooms.length === 0);
+      } catch (_) { /* silencioso */ }
+    }
+    function currentJoin(code) { send({ type: 'join', code }); }
+    function escapeHtml(s) { return String(s).replace(/[&<>"']/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])); }
 
     async function loadRanking() {
       try {
@@ -197,106 +441,185 @@
           list.appendChild(li);
         }
         $('rankingEmpty').textContent = (data.entries || []).length ? '' : 'Ainda não há partidas finalizadas.';
-        $('ranking').hidden = false;
-      } catch (_) { $('ranking').hidden = true; }
+        show('rankingPanel', true);
+      } catch (_) { show('rankingPanel', false); }
     }
 
-    function closeSocket() {
-      if (ws) { const old = ws; ws = null; old.close(); }
+    /* ---------- mesa ---------- */
+    function seatInfo(seat) {
+      const p = state.players.find((x) => x.seat === seat);
+      return p || null;
     }
-
-    function showError(message) {
-      $('error').textContent = message;
-      setTimeout(() => { if ($('error').textContent === message) $('error').textContent = ''; }, 4000);
+    function renderSeats() {
+      const turn = state.hand ? state.hand.turn : null;
+      for (const seat of [0, 1, 2, 3]) {
+        const el = $('seat' + seat);
+        const p = seatInfo(seat);
+        const mine = seat === state.you.seat;
+        el.classList.toggle('off', !p || !p.connected);
+        const tag = !p ? '<span class="who">aguardando…</span>'
+          : `<span class="who ${turn === seat && state.state === 'playing' ? 'turn' : ''}">${escapeHtml(p.name)}${mine ? ' (você)' : ''}${p.connected ? '' : ' · offline'}</span>`;
+        const cards = state.hand && p ? `<div class="pile">${state.hand.otherPlayersCardCounts[seat] ?? (mine ? state.hand.myHand.length : '')} cartas</div>` : '';
+        el.innerHTML = tag + (seat === state.you.seat ? '' : cards);
+      }
     }
-
-    function send(payload) { if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(payload)); }
-
-    function cardEl(card, clickable) {
-      const el = document.createElement('div');
-      el.className = 'card' + (RED.has(card.suit) ? ' red' : '') + (clickable ? ' mine' : '');
-      el.innerHTML = `<span class="rank">${card.rank}</span><span class="suit">${SUIT_SYMBOL[card.suit]} ${SUIT_LABEL[card.suit]}</span>`;
-      if (clickable) el.onclick = () => send({ type: 'play', card });
-      return el;
-    }
-
-    function nextRankLabel(rank) {
-      const order = ['4','5','6','7','Q','J','K','A','2','3'];
-      return order[(order.indexOf(rank) + 1) % order.length];
-    }
-
-    function render() {
+    function render(prev) {
       if (!state) return;
-      $('lobby').hidden = true;
-      $('game').hidden = false;
+      showScreen('game');
       $('roomCode').textContent = state.code;
       $('score').textContent = `Nós ${state.score[0]} × ${state.score[1]} Eles`;
-      const seatNames = [0, 1, 2, 3].map((seat) => {
-        const p = state.players.find((x) => x.seat === seat);
-        return p ? `${p.name}${p.connected ? '' : ' (offline)'}` : '—';
-      });
-      $('seats').textContent = `Assentos: 0 ${seatNames[0]} · 1 ${seatNames[1]} · 2 ${seatNames[2]} · 3 ${seatNames[3]}`;
-
       const hand = state.hand;
-      const myTurn = hand && hand.turn === state.you.seat && hand.status !== 'finished';
-      const pending = hand && hand.pendingTruco;
-      const responder = pending && pending.by % 2 !== state.you.seat % 2;
+      const mySide = state.you.seat % 2;
 
-      if (state.state === 'waiting') {
-        $('turnInfo').textContent = `Aguardando jogadores (${state.players.length}/4). Compartilhe o código ${state.code}.`;
-      } else if (state.state === 'finished') {
-        $('turnInfo').textContent = state.matchWinner === state.you.seat % 2 ? 'Você venceu a partida!' : 'Partida encerrada.';
-      } else if (pending) {
-        $('turnInfo').textContent = responder ? `Adversário pediu ${pending.value}. Responda.` : `Aguardando resposta ao pedido de ${pending.value}.`;
-      } else {
-        $('turnInfo').textContent = myTurn ? 'Sua vez de jogar.' : `Vez do assento ${hand ? hand.turn : '-'}.`;
+      renderSeats();
+
+      // vira e cartas na mesa
+      $('vira').innerHTML = hand ? `vira <b>${hand.vira.rank} ${SUIT_SYMBOL[hand.vira.suit]}</b> · manilha <b>${nextRankLabel(hand.vira.rank)}</b>` : '';
+      const trick = $('trick');
+      trick.innerHTML = '';
+      if (hand) for (const play of hand.currentRound) {
+        const who = play.seat;
+        const el = cardEl(play.card, { played: true, manilha: isManilha(play.card, hand.vira.rank) });
+        el.title = seatInfo(who)?.name || '';
+        trick.appendChild(el);
       }
 
-      const table = $('table');
-      table.innerHTML = '';
-      if (hand) for (const play of hand.currentRound) table.appendChild(cardEl(play.card, false));
-      $('vira').textContent = hand ? `Vira: ${hand.vira.rank} de ${SUIT_LABEL[hand.vira.suit]} (manilha ${nextRankLabel(hand.vira.rank)})` : '';
+      const stake = $('stake');
+      if (hand && hand.stake > 1) { stake.hidden = false; stake.textContent = `Valendo ${hand.stake}`; }
+      else stake.hidden = true;
+
+      // minha mão
+      const myTurn = hand && hand.turn === state.you.seat && hand.status !== 'finished';
+      const pending = hand && hand.pendingTruco;
+      const responder = !!pending && pending.by % 2 !== mySide;
+      const canPlay = myTurn && !pending;
 
       const handEl = $('hand');
       handEl.innerHTML = '';
-      const canPlay = myTurn && !pending;
-      if (hand) for (const card of hand.myHand) handEl.appendChild(cardEl(card, canPlay));
+      if (hand) for (const card of hand.myHand) {
+        handEl.appendChild(cardEl(card, {
+          clickable: canPlay,
+          manilha: isManilha(card, hand.vira.rank),
+        }));
+      }
 
-      $('truco').disabled = !(myTurn && !pending && hand && hand.stake < 12);
+      // mensagem de estado
+      let info = '';
+      let infoClass = '';
+      if (state.state === 'waiting') {
+        info = `Aguardando jogadores (${state.players.length}/4). Compartilhe o código ${state.code}.`;
+      } else if (state.state === 'finished') {
+        const won = state.matchWinner === mySide;
+        info = won ? '🏆 Você venceu a partida!' : 'Partida encerrada.';
+        infoClass = 'turn';
+      } else if (pending) {
+        info = responder ? `Adversário pediu ${pending.value}. Responda!` : `Aguardando resposta ao pedido de ${pending.value}…`;
+        infoClass = 'turn';
+      } else if (myTurn) {
+        info = 'Sua vez de jogar';
+        infoClass = 'turn';
+      } else if (hand) {
+        const who = seatInfo(hand.turn);
+        info = `Vez de ${who ? escapeHtml(who.name) : 'assento ' + hand.turn}`;
+      }
+      $('turnInfo').textContent = info;
+      $('turnInfo').className = 'info ' + infoClass;
+
+      // botões
+      const canTruco = myTurn && !pending && hand && hand.stake < 12;
+      $('truco').disabled = !canTruco;
       $('accept').disabled = !responder;
       $('run').disabled = !responder;
       $('raise').disabled = !(responder && pending && pending.value < 12);
-      $('stakeInfo').textContent = hand ? `Valor da mão: ${hand.stake}` : '';
-      $('results').textContent = state.handResults.length
-        ? 'Mãos: ' + state.handResults.map((r) => (r.winner === state.you.seat % 2 ? `+${r.points}` : `-${r.points}`)).join(' ')
-        : '';
+      $('truco').textContent = hand && hand.stake >= 3 ? `${nextTrucoLabel(hand.stake)}` : 'TRUCO';
+      $('raise').textContent = pending ? `Aumentar p/ ${nextTrucoLabel(pending.value)}` : 'Aumentar';
+
+      // resultados das mãos
+      $('results').innerHTML = '';
+      for (const r of state.handResults) {
+        const d = document.createElement('div');
+        const won = r.winner === mySide;
+        d.className = 'res ' + (won ? 'win' : 'lose');
+        d.textContent = won ? '✓' : '✗';
+        d.title = `${won ? 'vitória' : 'derrota'} de ${r.points}`;
+        $('results').appendChild(d);
+      }
+
+      // avisos pontuais
+      if (prev && prev.hand && hand) {
+        if (prev.hand.pendingTruco == null && pending) toast(`Pedido de ${pending.value}!`, '');
+        if (prev.hand.currentRound.length === 3 && hand.currentRound.length === 0) {
+          // rodada fechada
+        }
+      }
+      if (prev && prev.state === 'playing' && state.state === 'finished') toast('Fim de partida', 'ok');
+      if (prev && prev.hand && hand && prev.hand.status !== 'finished' && hand.status === 'finished') {
+        const w = hand.winner === mySide;
+        toast(w ? `Você ganhou a mão (+${hand.stake})` : `Adversário ganhou a mão`, w ? 'ok' : '');
+      }
+      $('table').classList.toggle('bump', !!(prev && prev.score && (prev.score[0] !== state.score[0] || prev.score[1] !== state.score[1])));
+    }
+    function nextTrucoLabel(current) {
+      const ladder = [1, 3, 6, 9, 12];
+      const names = { 3: 'TRUCO', 6: 'SEIS', 9: 'NOVE', 12: 'DOZE' };
+      const idx = ladder.indexOf(current);
+      const next = ladder[idx + 1];
+      return next ? names[next] : 'Máximo';
     }
 
+    /* ---------- eventos ---------- */
+    $('create').onclick = () => send({ type: 'create' });
+    $('join').onclick = () => send({ type: 'join', code: $('code').value.trim().toUpperCase() });
+    $('code').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('join').click(); });
+    $('refresh').onclick = refreshRooms;
+    $('leave').onclick = () => { lastRoomCode = null; state = null; showScreen('lobby'); refreshRooms(); };
+    $('copyCode').onclick = async () => {
+      try { await navigator.clipboard.writeText(state.code); toast('Código copiado', 'ok'); }
+      catch (_) { toast('Código: ' + state.code); }
+    };
     $('truco').onclick = () => send({ type: 'truco' });
     $('accept').onclick = () => send({ type: 'respond', action: 'accept' });
     $('run').onclick = () => send({ type: 'respond', action: 'run' });
     $('raise').onclick = () => send({ type: 'respond', action: 'raise' });
-    $('create').onclick = () => send({ type: 'create' });
-    $('join').onclick = () => send({ type: 'join', code: $('code').value.trim().toUpperCase() });
     $('guestBtn').onclick = () => {
       guestName = ($('guestName').value.trim() || 'Convidado').slice(0, 20);
       localStorage.setItem('truco.guestName', guestName);
       openSocket();
     };
+    $('guestName').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('guestBtn').click(); });
     $('googleBtn').onclick = async () => {
-      try {
-        await firebaseAuth.signInWithPopup(new firebase.auth.GoogleAuthProvider());
-      } catch (err) { showError('Não foi possível entrar com o Google.'); }
-    };
-    $('signout').onclick = async () => {
-      closeSocket();
-      if (config && config.authMode === 'firebase' && firebaseAuth) await firebaseAuth.signOut();
-      else showLoginFor('guest');
-      state = null;
+      try { await firebaseAuth.signInWithPopup(new firebase.auth.GoogleAuthProvider()); }
+      catch (_) { toast('Não foi possível entrar com o Google.', 'err'); }
     };
 
+    /* ---------- inicialização ---------- */
+    async function loadConfig() {
+      const res = await fetch('/config', { cache: 'no-store' });
+      config = await res.json();
+      if (config.authMode === 'firebase') {
+        if (!window.firebase) { $('loginStatus').textContent = 'Não foi possível carregar o login do Google.'; showScreen('login'); show('googleLogin', true); return; }
+        firebase.initializeApp({
+          apiKey: config.firebase.apiKey,
+          authDomain: config.firebase.authDomain,
+          projectId: config.firebase.projectId,
+        });
+        firebaseAuth = firebase.auth();
+        firebaseAuth.onAuthStateChanged((user) => {
+          if (user) { openSocket(); }
+          else { closeSocket(); showScreen('login'); show('googleLogin', true); show('guestLogin', false); }
+        });
+        showScreen('login'); show('googleLogin', true);
+        $('loginStatus').textContent = 'Entre com sua conta Google para jogar.';
+      } else {
+        showScreen('login'); show('guestLogin', true);
+        $('guestName').value = guestName;
+        $('loginStatus').textContent = 'MODO DE TESTE: sem login real.';
+      }
+    }
+
     loadRanking();
-    loadConfig().catch(() => { $('loginStatus').textContent = 'Erro ao carregar a configuração do servidor.'; $('login').hidden = false; });
+    loadConfig().catch(() => { showScreen('login'); $('loginStatus').textContent = 'Erro ao carregar a configuração do servidor.'; });
+    setInterval(() => { if (!$('lobby').hidden) refreshRooms(); }, 5000);
   </script>
 </body>
 </html>

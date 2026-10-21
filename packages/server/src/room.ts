@@ -87,6 +87,16 @@ export class Room {
     return this.players.map((p) => p.playerId);
   }
 
+  /** Resumo público para o lobby: nunca expõe identificadores internos. */
+  summary(): { code: string; state: RoomState; seated: number; names: string[] } {
+    return {
+      code: this.code,
+      state: this.state,
+      seated: this.players.length,
+      names: this.players.map((p) => p.name),
+    };
+  }
+
   /**
    * Entra na sala. Um jogador que já tem assento volta ao mesmo lugar (reconexão).
    */
@@ -242,6 +252,14 @@ export class RoomRegistry {
 
   get(code: string): Room | undefined {
     return this.rooms.get(code.toUpperCase());
+  }
+
+  /** Mesas que ainda aceitam jogadores. */
+  openRooms(): Array<{ code: string; state: RoomState; seated: number; names: string[] }> {
+    return [...this.rooms.values()]
+      .map((r) => r.summary())
+      .filter((r) => r.state === 'waiting')
+      .sort((a, b) => b.seated - a.seated);
   }
 }
 
